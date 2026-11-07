@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#080b13" />
+  <title>Dokumentasi API — ThorHub</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img class="logo" src="/logo.svg" alt="" width="30" height="30" />
+      <span class="txt">Thor<em>Hub</em></span>
+      <span class="suffix">· Docs</span>
+    </a>
+    <button class="nav-toggle" aria-label="Buka menu" aria-expanded="false" aria-controls="main-nav">
+      <span class="icon-open">☰</span>
+      <span class="icon-close">✕</span>
+    </button>
+    <nav id="main-nav">
+      <a href="/">Beranda</a>
+      <a href="/portal">Portal Member</a>
+      <a href="/admin">Panel Admin</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <h1>Dokumentasi <span class="grad">API</span></h1>
+    <p class="sub">ThorHub bersifat <b>OpenAI-compatible</b>. Gunakan Sub-API Key Anda sebagai Bearer token.</p>
+
+    <div class="card">
+      <h2>Base URL</h2>
+      <div class="mono" style="word-break:break-all" id="base-url">…</div>
+    </div>
+
+    <div class="card">
+      <h2>Daftar Model Tersedia</h2>
+      <p class="muted" id="models-meta">Memuat…</p>
+      <div class="row-actions" style="margin-top:0;margin-bottom:12px">
+        <input id="search" placeholder="Cari model…" style="max-width:280px" class="w-full" />
+        <button class="btn small" id="btn-refresh">Muat Ulang</button>
+      </div>
+      <div id="models-wrap"><p class="muted">Memuat daftar model…</p></div>
+    </div>
+
+    <div class="card">
+      <h2>1. Chat — cURL</h2>
+      <pre id="ex-curl">…</pre>
+      <button class="btn small" data-copy="ex-curl">Salin</button>
+    </div>
+
+    <div class="card">
+      <h2>2. Chat — Python (OpenAI SDK)</h2>
+      <pre id="ex-python">…</pre>
+      <button class="btn small" data-copy="ex-python">Salin</button>
+    </div>
+
+    <div class="card">
+      <h2>3. Chat — Streaming</h2>
+      <pre id="ex-stream">…</pre>
+      <button class="btn small" data-copy="ex-stream">Salin</button>
+    </div>
+
+    <div class="card">
+      <h2>4. Daftar Model (endpoint)</h2>
+      <pre id="ex-models">…</pre>
+      <button class="btn small" data-copy="ex-models">Salin</button>
+    </div>
+
+    <div class="card">
+      <h2>Format Respons</h2>
+      <p class="muted">Standar OpenAI: <code>choices[].message.content</code>, <code>usage.total_tokens</code>. Setiap token yang terpakai otomatis dipotong dari kuota Anda.</p>
+      <h2 style="margin-top:16px">Kode Error</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>HTTP</th><th>Code</th><th>Artinya</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>401</td><td class="mono">invalid_api_key</td><td>Sub-API Key salah/kosong</td></tr>
+            <tr><td>403</td><td class="mono">insufficient_quota</td><td>Kuota token habis</td></tr>
+            <tr><td>403</td><td class="mono">key_disabled</td><td>Key dinonaktifkan admin</td></tr>
+            <tr><td>429</td><td class="mono">rate_limited</td><td>Terlalu banyak permintaan per menit</td></tr>
+            <tr><td>502</td><td class="mono">provider_error</td><td>Provider upstream bermasalah</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script defer src="/nav.js"></script>
+  <script src="/docs.js"></script>
+</body>
+</html>

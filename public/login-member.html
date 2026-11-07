@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#080b13" />
+  <title>Login Member — ThorHub</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img class="logo" src="/logo.svg" alt="" width="30" height="30" />
+      <span class="txt">Thor<em>Hub</em></span>
+    </a>
+    <button class="nav-toggle" aria-label="Buka menu" aria-expanded="false" aria-controls="main-nav">
+      <span class="icon-open">☰</span>
+      <span class="icon-close">✕</span>
+    </button>
+    <nav id="main-nav">
+      <a href="/">Beranda</a>
+      <a href="/docs">Dokumentasi</a>
+      <a href="/admin">Panel Admin</a>
+    </nav>
+  </header>
+
+  <main class="wrap narrow">
+    <div class="card">
+      <h1>Portal <span class="grad">Member</span></h1>
+      <p class="sub">Masuk dengan Sub-API Key Anda untuk melihat kuota pemakaian.</p>
+
+      <form id="form">
+        <label for="apikey">Sub-API Key</label>
+        <input id="apikey" type="password" class="mono" placeholder="sk-thor-..." autocomplete="off" required />
+        <div class="row-actions">
+          <button class="btn primary w-full" type="submit" id="btn">Masuk</button>
+        </div>
+      </form>
+      <div id="msg"></div>
+    </div>
+  </main>
+
+  <script defer src="/nav.js"></script>
+  <script>
+    const form = document.getElementById("form");
+    const msg = document.getElementById("msg");
+    const btn = document.getElementById("btn");
+
+    fetch("/portal/member/me").then(r => { if (r.ok) location.href = "/portal"; }).catch(() => {});
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.innerHTML = "";
+      btn.disabled = true;
+      try {
+        const r = await fetch("/portal/member/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: document.getElementById("apikey").value.trim() }),
+        });
+        const d = await r.json();
+        if (!r.ok) {
+          msg.innerHTML = `<div class="alert err">${d.error?.message || "Login gagal."}</div>`;
+        } else {
+          location.href = "/portal";
+        }
+      } catch (err) {
+        msg.innerHTML = `<div class="alert err">Gagal menghubungi server.</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

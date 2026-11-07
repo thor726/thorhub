@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#080b13" />
+  <title>Portal Member — ThorHub</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img class="logo" src="/logo.svg" alt="" width="30" height="30" />
+      <span class="txt">Thor<em>Hub</em></span>
+      <span class="suffix">· Member</span>
+    </a>
+    <button class="nav-toggle" aria-label="Buka menu" aria-expanded="false" aria-controls="main-nav">
+      <span class="icon-open">☰</span>
+      <span class="icon-close">✕</span>
+    </button>
+    <nav id="main-nav">
+      <a href="/">Beranda</a>
+      <a href="/docs">Dokumentasi</a>
+      <a href="/admin">Panel Admin</a>
+      <a href="#" id="btn-logout" class="hidden">Keluar</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <div id="loading" class="card center"><p class="muted">Memuat…</p></div>
+
+    <!-- SECTION LOGIN -->
+    <div id="login-section" class="hidden">
+      <div class="narrow card" style="margin:0 auto">
+        <h1>Portal <span class="grad">Member</span></h1>
+        <p class="sub">Masuk dengan Sub-API Key Anda untuk melihat kuota pemakaian.</p>
+        <form id="form-login">
+          <label for="apikey">Sub-API Key</label>
+          <input id="apikey" type="password" class="mono" placeholder="sk-thor-..." autocomplete="off" required />
+          <div class="row-actions">
+            <button class="btn primary w-full" type="submit" id="btn-login">Masuk</button>
+          </div>
+        </form>
+        <div id="login-msg"></div>
+      </div>
+    </div>
+
+    <div id="panel" class="hidden">
+      <h1>Halo, <span class="grad" id="uname">…</span></h1>
+      <p class="sub">Pantau kuota token dan contoh pemakaian Anda.</p>
+
+      <div id="status-warn"></div>
+
+      <div class="grid" id="cards"></div>
+
+      <div class="card mt-4">
+        <h2>Sub-API Key Anda</h2>
+        <div class="mono" style="word-break:break-all;user-select:all" id="mykey">…</div>
+        <div class="row-actions">
+          <button class="btn small" id="btn-reveal">Tampilkan</button>
+          <button class="btn small" id="btn-copy">Salin</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Contoh Pemakaian (curl)</h2>
+        <pre id="curl-example">…</pre>
+      </div>
+
+      <div class="card">
+        <h2>Contoh Python (OpenAI SDK)</h2>
+        <pre id="py-example">…</pre>
+      </div>
+    </div>
+  </main>
+
+  <script defer src="/nav.js"></script>
+  <script src="/portal.js"></script>
+</body>
+</html>

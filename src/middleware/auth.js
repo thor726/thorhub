@@ -1,0 +1,68 @@
+/**
+ * auth.js — Middleware otentikasi Sub-API Key + validasi kuota.
+ *
+ * Urutan pemeriksaan (sesuai spesifikasi):
+ *   1. 401 → header Authorization hilang / format salah / key tidak ditemukan
+ *   2. 403 → key dinonaktifkan (is_active = false)
+ *   3. 403 → kuota habis (tokens_used >= token_limit)
+ *
+ * Format error meniru gaya OpenAI agar SDK/_client pembeli tetap kompatibel.
+ */
+const db = require("../db");
+
+const stmtGetByKey = db.prepare("SELECT * FROM api_keys WHERE api_key = ?");
+
+function authenticateSubKey(req, res, next) {
+  const header = req.headers.authorization || "";
+  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  const apiKey = match ? match[1].trim() : null;
+
+  if (!apiKey) {
+    return res.status(401).json({
+      error: {
+        message: "Header Authorization wajib diisi dengan format: Bearer sk-thor-xxx",
+        type: "invalid_request_error",
+        code: "missing_api_key",
+      },
+    });
+  }
+
+  const row = stmtGetByKey.get(apiKey);
+
+  if (!row) {
+    return res.status(401).json({
+      error: {
+        message: "Sub-API Key tidak ditemukan atau tidak valid.",
+        type: "invalid_request_error",
+        code: "invalid_api_key",
+      },
+    });
+  }
+
+  if (!row.is_active) {
+    return res.status(403).json({
+      error: {
+        message: "Sub-API Key Anda sedang dinonaktifkan. Silakan hubungi admin.",
+        type: "insufficient_quota",
+        code: "key_disabled",
+      },
+    });
+  }
+
+  if (row.tokens_used >= row.token_limit) {
+    return res.status(403).json({
+      error: {
+        message: `Kuota token Anda sudah habis (terpakai ${row.tokens_used} dari ${row.token_limit}). Silakan top up.`,
+        type: "insufficient_quota",
+        code: "quota_exceeded",
+      },
+    });
+  }
+
+  // Simpan data key untuk dipakai handler berikutnya
+  req.subKey = row;
+  req.remainingQuota = row.token_limit - row.tokens_used;
+  next();
+}
+
+module.exports = { authenticateSubKey };

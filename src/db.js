@@ -1,0 +1,43 @@
+/**
+ * db.js — Koneksi SQLite (better-sqlite3) + skema tabel Sub-API Key.
+ *
+ * Dipakai bersama oleh server (src/server.js) dan CLI (generate-key.js /
+ * manage-keys.js). Mode WAL membuat akses multi-proses tetap aman & cepat.
+ */
+const path = require("path");
+const fs = require("fs");
+const Database = require("better-sqlite3");
+
+const dataDir = path.join(__dirname, "..", "data");
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+const db = new Database(path.join(dataDir, "gateway.db"));
+db.pragma("journal_mode = WAL");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS api_keys (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    api_key      TEXT    NOT NULL UNIQUE,
+    user_name    TEXT    NOT NULL,
+    token_limit  INTEGER NOT NULL,
+    tokens_used  INTEGER NOT NULL DEFAULT 0,
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys (api_key);
+
+  -- Tabel sesi login (admin & member) — dipakai panel web
+  CREATE TABLE IF NOT EXISTS sessions (
+    token       TEXT    PRIMARY KEY,
+    role        TEXT    NOT NULL,               -- 'admin' | 'member'
+    user_name   TEXT,                           -- untuk member (nama pembeli)
+    api_key     TEXT,                           -- untuk member (sub-key miliknya)
+    created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now')),
+    expires_at  INTEGER NOT NULL                -- epoch ms
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at);
+`);
+
+module.exports = db;
