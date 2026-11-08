@@ -1437,8 +1437,22 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   from { opacity: .25; transform: scaleY(.6); }
   to   { opacity: 1; transform: scaleY(1); }
 }
-@keyframes orbit-cw  { to { transform: rotate(360deg); } }
-@keyframes orbit-ccw { to { transform: rotate(-360deg); } }
+/* PENTING — `from` WAJIB eksplisit.
+   Bila `from` tidak ditulis, browser memakai gaya dasar (.base) elemen sebagai
+   titik awal. Selama gaya dasar `.orbit-ring` adalah `transform: none`, itu
+   otomatis dianggap `rotate(0deg)` dan animasi berjalan mulus. Tetapi begitu
+   gaya dasar berisi FUNGSI transform lain (mis. `translate3d(0,0,0)` — yang
+   dulu sempat ditambahkan), daftar fungsinya jadi tidak cocok: browser beralih
+   ke interpolasi MATRIKS, dan matriks `translate3d(0,0,0)` identik dengan
+   `rotate(360deg)` → hasilnya nol gerakan (cincin diam total).
+   Menulis `from` eksplisit mengunci titik awal = rotate(0deg) sehingga rotasi
+   selalu berjalan, apa pun gaya dasar elemennya. */
+@keyframes orbit-cw  { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes orbit-ccw { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+/* Rotasi POROS SENDIRI tiap simpul vendor (planet berputar sambil mengorbit).
+   Terpisah dari orbit-cw/ccw supaya kecepatannya bisa diatur sendiri. */
+@keyframes node-spin     { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes node-spin-rev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
 
 /* ==============================================================
    ORBIT VENDOR — "Powered by leading AI models"
@@ -1475,8 +1489,10 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   border: 1px dashed var(--border);
   border-radius: 50%;
   animation: orbit-cw 44s linear infinite;
-  /* Layer GPU mandiri: berputar murni via transform → tak ada repaint. */
-  transform: translate3d(0, 0, 0);
+  /* PENTING: JANGAN menaruh `transform` statis di sini. Gaya dasar apa pun
+     selain `none` membuat browser menginterpolasi keyframes lewat matriks dan
+     rotasi bisa berhenti total (cincin diam) — lihat catatan `from` di atas.
+     Layer GPU cukup dipaksa lewat will-change, bukan translate3d. */
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   will-change: transform;
@@ -1523,8 +1539,29 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   transition: border-color var(--t) ease, color var(--t) ease;
 }
 .o-node:hover { border-color: var(--lime-line); color: var(--lime); }
-/* Label berputar balik supaya teks tetap tegak */
-.o-node .t { animation: orbit-ccw 44s linear infinite; display: grid; place-items: center; width: 100%; height: 100%; position: relative; z-index: 1; }
+/* Label berputar balik supaya teks tetap tegak.
+   Dipercepat listrik 1px: `will-change: transform` menandai bahwa elemen ini
+   berubah tiap frame sehingga browser siapkan layer-nya sejak awal. */
+.o-node .t {
+  animation: orbit-ccw 44s linear infinite;
+  display: grid; place-items: center; width: 100%; height: 100%;
+  position: relative; z-index: 1;
+  will-change: transform;
+}
+/* --- ROTASI DIRI tiap logo vendor ---
+   Ini "planetenya": tiap logo berputar pada POROS SENDIRI sambil ikut
+   mengelilingi logo ThorHub. Dipisah ke span .o-spin karena .t sudah dipakai
+   untuk putar-balik; satu elemen hanya boleh punya satu properti `transform`
+   yang aktif — kalau digabung, salah satu rotasi akan saling menimpa.
+   Arah putaran dibuat BEDA per cincin (luar cw, dalam ccw) agar tidak terasa
+   monoton; sama halnya dengan cincin induknya. */
+.o-spin {
+  display: grid; place-items: center;
+  width: 100%; height: 100%;
+  animation: node-spin 14s linear infinite;
+  will-change: transform;
+}
+.orbit-ring.rev .o-spin { animation: node-spin-rev 11s linear infinite; }
 
 /* Logo brand di dalam simpul — warna brand asli, hidup & ber-glow */
 .o-node .o-logo {
@@ -1571,7 +1608,7 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   /* Semua animasi latar + orbit dimatikan (elemen tetap terlihat, hanya diam). */
   .cc-bg-svg, .cc-bg-svg .ccbg-denyut, .cc-bg-svg .ccbg-halo, .cc-bg-svg .ccbg-kilat-grup,
   .cc-bg-svg .ccbg-cahaya-atas, .cc-bg-svg .ccbg-cahaya-bawah,
-  .orbit-ring, .o-node .t { animation: none !important; }
+  .orbit-ring, .o-node .t, .o-spin { animation: none !important; }
 }
 
 /* ==============================================================

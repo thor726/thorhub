@@ -44,9 +44,14 @@ window.simpulOrbit = function (nama, a, kecil) {
   const L = window.cariLogoVendor(nama);
   const cls = "o-node" + (kecil ? " sm" : "");
   if (L) {
+    // .t     → berputar BALIK melawan cincin orbit, supaya seluruh isi simpul
+    //          tetap tegak (tidak miring) selagi mengelilingi logo Thor.
+    // .o-spin → berputar pada POROS SENDIRI (rotasi diri), terpisah dari .t
+    //          agar dua rotasi tidak saling menimpa di satu properti transform.
     return '<div class="' + cls + '" style="--a:' + a + 'deg;--brand:' + L.color + '" title="' + nama + '">' +
-      '<span class="t"><svg class="o-logo" viewBox="' + L.vb + '" role="img" aria-label="' + nama + '">' +
-      '<path d="' + L.d + '"/></svg></span></div>';
+      '<span class="t"><span class="o-spin">' +
+      '<svg class="o-logo" viewBox="' + L.vb + '" role="img" aria-label="' + nama + '">' +
+      '<path d="' + L.d + '"/></svg></span></span></div>';
   }
   // Cadangan: inisial vendor
   const ini = String(nama || "?").replace(/[^A-Za-z0-9 ]/g, "").split(/\s+/)
