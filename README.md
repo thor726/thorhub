@@ -331,7 +331,7 @@ Konsepnya "infrastruktur jaringan" — empat lapis dari belakang ke depan:
 | --- | --- | --- |
 | Cahaya | Pendar lime di tepi atas & bawah | Sumber & lantai cahaya |
 | Grid | Kisi 100px, garis aksen tiap 400px | Infrastruktur / gateway |
-| Jaringan | 30 simpul ("Hub") + garis penghubung; tiap simpul ke-5 berdenyut | Katalog vendor: banyak titik, satu jaringan |
+| Jaringan | 28 simpul ("Hub", cermin kiri↔kanan) + penghubung; tiap simpul ke-3 berdenyut | Katalog vendor: banyak titik, satu jaringan |
 | Halo & kilat | Busur halo berputar di cakrawala bawah + 2 kilat di margin tepi | "Hub" & identitas "Thor" |
 
 Detail teknis yang penting saat mengubahnya:
@@ -343,8 +343,18 @@ Detail teknis yang penting saat mengubahnya:
 - **Kilat ada di margin tepi** (x < 250 dan x > 1350) supaya pada desktop selalu
   di luar kolom konten. Kilat disembunyikan pada layar < 900px dan pada
   perangkat sentuh ≤ 1366px (hemat baterai).
+- **Simetris cermin terhadap garis tengah (x = 800)** — paruh kiri dicerminkan
+  ke paruh kanan: simpul digenerate hanya di paruh kiri lalu dicerminkan, halo
+  berpusat di x = 800, kilat kanan = cermin kilat kiri. Tujuannya agar komposisi
+  terasa "di tengah" dan tidak berat sebelah pada layar apa pun. Simetri ini
+  DIPERIKSA OTOMATIS oleh `test/check-bg.js` (tiap simpul, penghubung, dan garis
+  grid harus punya pasangan cermin) — bukan sekadar klaim.
 - **Simpul deterministik** (PRNG berbenih tetap) — tampilan sama setiap kali
   dimuat, tidak "gelisah" saat pindah halaman.
+- **Intensitas**: variabel `--cc-*` disetel agar latar JELAS terbaca namun tetap
+  pantas sebagai latar (diverifikasi terukur: kontras lokal grid ≈ 17–32,
+  jaringan ≈ 34–52 pada 8 ukuran layar). Di HP latar TIDAK diredupkan; hanya
+  kilat yang dimatikan (letaknya di margin tepi).
 - **Mask pemudar tepi** dipakai bersama grid & jaringan agar tidak berhenti
   mendadak di pinggir layar.
 - **`dvh`** dipakai (dengan fallback `vh`) agar akurat saat address bar mobile

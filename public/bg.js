@@ -1,35 +1,49 @@
 /**
  * bg.js — Latar belakang bertema THORHUB.
  *
- * KONSEP — "infrastruktur jaringan"
- *   Latar kali ini BUKAN ornamen besar di tengah layar, melainkan tekstur
- *   ambient yang menempel di belakang konten. Tema ThorHub diterjemahkan jadi
- *   empat lapis, dari paling belakang ke depan:
+ * KONSEP — "infrastruktur jaringan", SIMETRIS TERHADAP TENGAH
+ *   Latar adalah tekstur ambient di belakang konten, tersusun dari empat lapis
+ *   (belakang → depan):
  *
- *   1. CAHAYA   — pendar lime halus di tepi atas (sumber cahaya) dan di tepi
- *                 bawah (lantai). Memberi kedalaman tanpa bentuk yang jelas.
- *   2. GRID     — kisi 100px dengan garis utama 400px. Membaca "infrastruktur
- *                 / gateway". Dipudarkan ke tepi lewat <mask> radial supaya
- *                 tidak berhenti mendadak di pinggir layar.
- *   3. JARINGAN — simpul-simpul ("HUB") yang dihubungkan garis bila saling
- *                 berdekatan; tiap simpul ke-5 berdenyut. Ini metafora katalog
- *                 vendor: banyak titik, satu jaringan. Titiknya deterministik
- *                 (benih tetap) supaya tampilan sama setiap kali dimuat.
- *   4. KILAT    — dua kilat ramping di margin KIRI & KANAN bawah (identitas
- *                 "Thor"), plus busur halo putus-putus di cakrawala bawah.
+ *   1. CAHAYA   — pendar lime di tepi atas (sumber) dan tepi bawah (lantai).
+ *   2. GRID     — kisi 100px dengan garis aksen 400px. Membaca "infrastruktur
+ *                 / gateway". Dipudarkan ke tepi lewat <mask> radial.
+ *   3. JARINGAN — simpul-simpul ("HUB") yang dihubungkan garis bila berdekatan;
+ *                 tiap simpul ketiga berdenyut. Metafora katalog vendor: banyak
+ *                 titik, satu jaringan.
+ *   4. HALO     — tiga busur berputar di cakrawala bawah + dua kilat ("Thor")
+ *                 di margin kiri & kanan.
+ *
+ * SIMETRI (permintaan langsung pemilik produk)
+ *   Seluruh komposisi dibuat CERMIN SEMPURNA terhadap garis tengah x = 800
+ *   (paruh kiri dicerminkan ke paruh kanan), supaya tampilan terasa "di tengah"
+ *   dan tidak berat sebelah:
+ *     • Jaringan : simpul hanya digenerate di paruh kiri (x ≤ 720) lalu setiap
+ *                  simpul dicerminkan ke x' = 1600 − x. Karena aturan penghubung
+ *                  juga simetris, garis penghubungnya ikut simetris otomatis.
+ *     • Halo     : ketiga busur berpusat tepat di x = 800.
+ *     • Kilat    : jalur kanan adalah cerminan jalur kiri (dijaga manual, lihat
+ *                  buatKilat()).
+ *     • Grid     : kisi seragam 100px pada 1600px → selalu simetris.
+ *   Uji otomatis test/check-bg.js MEMBUKTIKAN simetri ini (tiap simpul harus
+ *   punya pasangan cermin).
  *
  * ATURAN TATA LETAK (diukur untuk viewBox 1600×1000)
- *   • preserveAspectRatio "xMidYMid slice" ⇒ layar lebar memotong atas-bawah,
- *     layar sempit (HP) memotong KIRI-KANAN ke pita tengah x ≈ 535–1065.
- *     Karena itu tak ada elemen struktural di luar pita bawah/tengah.
- *   • Kilat sengaja ditaruh di margin tepi (x < 250 dan x > 1350) sehingga pada
- *     desktop selalu berada di luar kolom konten (wrap maks 1200px, mulai x≈360).
- *   • Grid + jaringan opacity-nya sangat rendah, jadi aman berada di bawah teks.
+ *   preserveAspectRatio "xMidYMid slice" ⇒ layar lebar memotong atas-bawah,
+ *   layar sempit (HP) memotong KIRI-KANAN ke pita tengah x ≈ 535–1065. Karena
+ *   itu tidak ada elemen struktural di luar pita bawah/tengah, dan pemotongan
+ *   itu sendiri tetap simetris karena sumbu potongnya titik tengah.
+ *   Kilat sengaja di margin tepi (x < 250 dan x > 1350) sehingga pada desktop
+ *   selalu di luar kolom konten (wrap maks 1200px, mulai x ≈ 360).
  *
  * MENGAPA DIPISAH KE BERKAS SENDIRI
  *   Satu sumber kebenaran: halaman cukup memuat <script src="/bg.js"></script>.
  *   SVG disisipkan sebagai anak PERTAMA <body> dan skrip dijalankan sinkron
  *   (tanpa defer) agar tidak ada kedipan latar (FOUC).
+ *
+ * INTENSITAS WARNA
+ *   Semua warna/opasitas diatur di public/style.css lewat variabel --cc-*, bukan
+ *   di sini — supaya bisa disetel tanpa menyentuh geometri.
  */
 (function () {
   "use strict";
@@ -39,6 +53,7 @@
   // Kanvas logis latar. Semua koordinat di bawah memakai satuan ini.
   var W = 1600;
   var H = 1000;
+  var TENGAH = W / 2; // 800 — sumbu cermin seluruh komposisi
 
   /* ------------------------------------------------------------------ *
    *  Utilitas
@@ -55,6 +70,12 @@
       s = (s * 1664525 + 1013904223) >>> 0;
       return s / 4294967296;
     };
+  }
+
+  function jarak2(ax, ay, bx, by) {
+    var dx = ax - bx;
+    var dy = ay - by;
+    return dx * dx + dy * dy;
   }
 
   /* ------------------------------------------------------------------ *
@@ -77,27 +98,45 @@
   }
 
   /* ------------------------------------------------------------------ *
-   *  Lapis 3 — Jaringan simpul ("Hub")
+   *  Lapis 3 — Jaringan simpul ("Hub"), simetris cermin
    * ------------------------------------------------------------------ */
 
   /**
-   * Sebar 30 titik dengan tolakan minimum 92px supaya tidak menggumpal.
-   * Sampel ditolak (rejection sampling) — sederhana dan hasilnya konsisten.
+   * Sebar 14 titik di PARUH KIRI (sumbu x 80..720) lalu cerminkan ke paruh
+   * kanan → 28 simpul yang simetris sempurna terhadap x = 800.
+   *
+   * Catatan jarak: tolakan minimum diperiksa terhadap SEMUA simpul yang sudah
+   * ada — termasuk hasil cerminannya sendiri — supaya cerminan tidak menempel
+   * pada simpul tetangga (bisa terjadi bila sebuah titik dekat garis tengah).
    */
   function buatSimpul() {
     var r = acak(20261108);
-    var titik = [];
+    var titik = []; // berisi { x, y, aktif, tunda }
     var putar = 0;
-    while (titik.length < 30 && putar++ < 5000) {
-      var x = 60 + r() * (W - 120);
-      var y = 80 + r() * (H - 150);
-      var bebas = true;
-      for (var i = 0; i < titik.length; i++) {
-        var dx = titik[i][0] - x;
-        var dy = titik[i][1] - y;
-        if (dx * dx + dy * dy < 92 * 92) { bebas = false; break; }
+    var MAKS_DASAR = 14;
+    var R_MIN = 138; // tolakan minimum antar simpul
+    var dasar = 0;
+
+    while (dasar < MAKS_DASAR && putar++ < 12000) {
+      var x = 80 + r() * 640;              // 80 .. 720  (cermin: 880 .. 1520)
+      var y = 90 + r() * (H - 200);        // 90 .. 890
+      var mx = W - x;                      // cerminan terhadap x = 800
+
+      // Tolak bila terlalu dekat dengan simpul mana pun (atau cerminannya).
+      var bebas = jarak2(x, y, mx, y) > R_MIN * R_MIN; // jangan menempel cerminnya
+      for (var i = 0; i < titik.length && bebas; i++) {
+        if (jarak2(x, y, titik[i].x, titik[i].y) < R_MIN * R_MIN) bebas = false;
       }
-      if (bebas) titik.push([Math.round(x), Math.round(y)]);
+      if (!bebas) continue;
+
+      // Tiap simpul dasar ke-3 menjadi simpul "aktif" (berdenyut). Penentuannya
+      // dari indeks DASAR, jadi pasangan cerminnya ikut aktif → tetap simetris.
+      var aktif = dasar % 3 === 0;
+      var tunda = (dasar * 0.9).toFixed(1) + "s";
+
+      titik.push({ x: Math.round(x), y: Math.round(y), aktif: aktif, tunda: tunda });
+      titik.push({ x: Math.round(mx), y: Math.round(y), aktif: aktif, tunda: tunda });
+      dasar++;
     }
     return titik;
   }
@@ -110,21 +149,18 @@
 
     for (var i = 0; i < titik.length; i++) {
       for (var j = i + 1; j < titik.length; j++) {
-        var dx = titik[j][0] - titik[i][0];
-        var dy = titik[j][1] - titik[i][1];
-        if (dx * dx + dy * dy <= MAKS * MAKS) {
-          garis += '<line x1="' + titik[i][0] + '" y1="' + titik[i][1] +
-                   '" x2="' + titik[j][0] + '" y2="' + titik[j][1] + '"/>';
+        if (jarak2(titik[i].x, titik[i].y, titik[j].x, titik[j].y) <= MAKS * MAKS) {
+          garis += '<line x1="' + titik[i].x + '" y1="' + titik[i].y +
+                   '" x2="' + titik[j].x + '" y2="' + titik[j].y + '"/>';
         }
       }
+    }
 
-      // Tiap simpul ke-5 jadi simpul "aktif" yang berdenyut, dengan jeda
-      // bertingkat (animation-delay) supaya denyutnya mengalir, bukan serempak.
-      var aktif = i % 5 === 0;
-      simpul += '<circle class="ccbg-simpul' + (aktif ? " ccbg-denyut" : "") +
-                '" cx="' + titik[i][0] + '" cy="' + titik[i][1] + '" r="' +
-                (aktif ? 3 : 1.7) + '"' +
-                (aktif ? ' style="animation-delay:' + (i * 0.6).toFixed(1) + 's"' : "") +
+    for (var k = 0; k < titik.length; k++) {
+      var t = titik[k];
+      simpul += '<circle class="ccbg-simpul' + (t.aktif ? " ccbg-denyut" : "") +
+                '" cx="' + t.x + '" cy="' + t.y + '" r="' + (t.aktif ? 3.4 : 2) + '"' +
+                (t.aktif ? ' style="animation-delay:' + t.tunda + '"' : "") +
                 '/>';
     }
     return { garis: garis, simpul: simpul };
@@ -135,9 +171,9 @@
    * ------------------------------------------------------------------ */
 
   /**
-   * Busur halo di cakrawala BAWAH. Pusatnya sengaja di bawah kanvas (y=1180)
-   * sehingga hanya busur atas yang terlihat — seperti pendar cakrawala.
-   * Ketiganya berputar sangat pelan (satu grup, satu animasi).
+   * Busur halo di cakrawala BAWAH, berpusat TEPAT di x = 800 (simetris).
+   * Pusatnya sengaja di bawah kanvas (y = 1180) sehingga hanya busur atas yang
+   * terlihat — seperti pendar cakrawala. Ketiganya berputar pelan (satu grup).
    */
   function buatHalo() {
     var isi = "";
@@ -150,16 +186,17 @@
   }
 
   /**
-   * Dua kilat ("Thor") di margin tepi bawah. Bentuk zig-zag sengaja ditarik
-   * cukup rendah (y ≥ 620) agar pada layar pendek tidak menyentuh zona hero.
-   * Elemen ini disembunyikan CSS pada layar < 900px.
+   * Dua kilat ("Thor") di margin tepi bawah — jalur KANAN adalah cerminan
+   * jalur KIRI terhadap x = 800 (dijaga manual, tanpa loop, supaya bentuknya
+   * mudah dibaca & disesuaikan). Sengaja ditarik cukup rendah (y ≥ 620) agar
+   * pada layar pendek tidak menyentuh zona hero. Disembunyikan CSS < 900px.
    */
   function buatKilat() {
     return '' +
       // KIRI (x ≈ 128–246, di luar tepi kiri kolom konten)
       '<path class="ccbg-kilat" d="M186 620 L138 762 L182 770 L128 900 L176 908 L132 1010"/>' +
       '<path class="ccbg-kilat-cabang" d="M182 770 L232 812 L204 826 L246 866"/>' +
-      // KANAN (cermin dari yang kiri, x ≈ 1354–1472)
+      // KANAN — cermin tepat dari yang kiri (x' = 1600 − x)
       '<path class="ccbg-kilat" d="M1414 620 L1462 762 L1418 770 L1472 900 L1424 908 L1468 1010"/>' +
       '<path class="ccbg-kilat-cabang" d="M1418 770 L1368 812 L1396 826 L1354 866"/>';
   }
@@ -185,17 +222,17 @@
     svg.innerHTML =
       "<defs>" +
         '<radialGradient id="ccbg-cahaya-atas" cx="50%" cy="50%" r="50%">' +
-          '<stop offset="0" stop-color="#a3e635" stop-opacity=".13"/>' +
+          '<stop offset="0" stop-color="#a3e635" stop-opacity=".22"/>' +
           '<stop offset="1" stop-color="#a3e635" stop-opacity="0"/>' +
         '</radialGradient>' +
         '<radialGradient id="ccbg-cahaya-bawah" cx="50%" cy="50%" r="50%">' +
-          '<stop offset="0" stop-color="#a3e635" stop-opacity=".10"/>' +
+          '<stop offset="0" stop-color="#a3e635" stop-opacity=".18"/>' +
           '<stop offset="1" stop-color="#a3e635" stop-opacity="0"/>' +
         '</radialGradient>' +
         // Pemudar tepi: dipakai bersama oleh grid & jaringan.
         '<radialGradient id="ccbg-pudar" cx="50%" cy="45%" r="72%">' +
           '<stop offset="0" stop-color="#fff" stop-opacity="1"/>' +
-          '<stop offset="60%" stop-color="#fff" stop-opacity=".5"/>' +
+          '<stop offset="60%" stop-color="#fff" stop-opacity=".55"/>' +
           '<stop offset="100%" stop-color="#fff" stop-opacity="0"/>' +
         '</radialGradient>' +
         '<mask id="ccbg-pudar-mask" maskUnits="userSpaceOnUse" ' +

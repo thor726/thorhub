@@ -1177,12 +1177,12 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 .cc-bg-svg {
   --cc-lime: #a3e635;
   /* Warna tiap lapis dipisah supaya bisa disetel tanpa menyentuh yang lain */
-  --cc-grid: rgba(255, 255, 255, .018);
-  --cc-grid-kuat: rgba(163, 230, 53, .045);
-  --cc-net-garis: rgba(255, 255, 255, .020);
-  --cc-net-simpul: rgba(163, 230, 53, .11);
-  --cc-halo: rgba(163, 230, 53, .09);
-  --cc-kilat: rgba(163, 230, 53, .16);
+  --cc-grid: rgba(255, 255, 255, .042);
+  --cc-grid-kuat: rgba(163, 230, 53, .115);
+  --cc-net-garis: rgba(255, 255, 255, .055);
+  --cc-net-simpul: rgba(163, 230, 53, .34);
+  --cc-halo: rgba(163, 230, 53, .22);
+  --cc-kilat: rgba(163, 230, 53, .36);
   --cc-strength: 1;
 
   position: fixed;
@@ -1200,11 +1200,11 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 }
 
 /* --- Lapis 2: grid (garis utama tiap 400px sedikit lebih terang) --- */
-.cc-bg-svg .ccbg-garis { stroke: var(--cc-grid); stroke-width: 1; }
+.cc-bg-svg .ccbg-garis { stroke: var(--cc-grid); stroke-width: 1.1; }
 .cc-bg-svg .ccbg-garis-utama { stroke: var(--cc-grid-kuat); stroke-width: 1; }
 
 /* --- Lapis 3: jaringan simpul --- */
-.cc-bg-svg .ccbg-net-garis line { stroke: var(--cc-net-garis); stroke-width: 1; }
+.cc-bg-svg .ccbg-net-garis line { stroke: var(--cc-net-garis); stroke-width: 1.1; }
 .cc-bg-svg .ccbg-simpul { fill: var(--cc-net-simpul); }
 /* Simpul aktif berdenyut pelan; animation-delay diatur inline per simpul
    (lihat bg.js) sehingga denyutnya mengalir, bukan berkedip serempak. */
@@ -1268,14 +1268,20 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
    (x ≈ 535–1065 di viewBox 1600), jadi grid tetap tampil rapat & rapi. */
 @media (max-width: 899px) {
   .cc-bg-svg {
-    --cc-strength: .9;
-    --cc-grid: rgba(255, 255, 255, .014);
-    --cc-grid-kuat: rgba(163, 230, 53, .032);
+    /* Di HP tetap terang (jangan dibuat gelap) — hanya grid sedikit diringankan
+       agar tidak terasa ramai pada layar kecil; jaringan TETAP tampil karena
+       komposisinya sudah simetris sehingga aman di belakang konten. */
+    --cc-strength: 1;
+    --cc-grid: rgba(255, 255, 255, .034);
+    --cc-grid-kuat: rgba(163, 230, 53, .095);
+    --cc-net-garis: rgba(255, 255, 255, .045);
+    --cc-net-simpul: rgba(163, 230, 53, .28);
   }
-  .cc-bg-svg .ccbg-net,
+  /* Hanya kilat yang dimatikan di HP: letaknya di margin tepi, dan pada layar
+     sempit kolom konten memenuhi lebar sehingga berisiko menimpa teks. */
   .cc-bg-svg .ccbg-kilat-grup { display: none; }
-  /* Halo di HP: pendar cakrawala tetap ada, tapi dibuat lebih samar. */
-  .cc-bg-svg .ccbg-halo { --cc-halo: rgba(163, 230, 53, .075); }
+  /* Halo: pendar cakrawala tetap ada, sedikit lebih lembut dari desktop. */
+  .cc-bg-svg .ccbg-halo { --cc-halo: rgba(163, 230, 53, .18); }
 }
 
 /* Tablet & laptop kecil: jaringan tetap, kilat dimatikan agar tak dekat konten */
@@ -1285,7 +1291,8 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 
 /* Layar sangat besar: sedikit diringankan agar tidak berat */
 @media (min-width: 1600px) {
-  .cc-bg-svg { --cc-strength: .92; }
+  /* Layar sangat besar: pertahankan penuh (jangan diredupkan). */
+  .cc-bg-svg { --cc-strength: 1; }
 }
 
 /* Perangkat sentuh: matikan kilat juga di tablet besar (hemat baterai) */
