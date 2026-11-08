@@ -6,6 +6,25 @@
   <meta name="theme-color" content="#0a0a0a" />
   <title>404 — ThorHub</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preload" href="/logo.svg" as="image" type="image/svg+xml" />
+  <!-- PWA & ikon -->
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ThorHub" />
+
+  <!-- Pratinjau saat dibagikan -->
+  <meta name="description" content="Halaman yang Anda cari tidak ditemukan." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ThorHub" />
+  <meta property="og:title" content="Halaman Tidak Ditemukan — ThorHub" />
+  <meta property="og:description" content="Halaman yang Anda cari tidak ditemukan." />
+  <meta property="og:image" content="https://llm.thormarket.site/icon-512.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Halaman Tidak Ditemukan — ThorHub" />
+  <meta name="twitter:description" content="Halaman yang Anda cari tidak ditemukan." />
+  <meta name="twitter:image" content="https://llm.thormarket.site/icon-512.png" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body class="cc-aurora">
@@ -31,8 +50,33 @@
     <g class="cc-aurora-halo"><use href="#cc-aurora-curves" filter="url(#cc-aurora-glow)" stroke-width="1.5"/></g>
     <use class="cc-aurora-sharp" href="#cc-aurora-curves" stroke-width="1"/>
   </svg>
-  <main class="wrap narrow center" style="padding-top:64px">
-    <img class="notfound-logo" src="/logo.svg" alt="ThorHub" width="72" height="72" style="margin-bottom:16px" />
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img class="logo" src="/logo.svg" alt="" width="28" height="28" />
+      <span class="txt">Thor<em>Hub</em></span>
+    </a>
+    <button class="nav-toggle" aria-label="Buka menu" aria-expanded="false" aria-controls="main-nav">
+      <span class="icon-open">☰</span>
+      <span class="icon-close">✕</span>
+    </button>
+    <nav id="main-nav">
+      <a href="/">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+        Beranda
+      </a>
+      <a href="/docs">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Dokumentasi
+      </a>
+      <a href="/portal">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Portal Member
+      </a>
+    </nav>
+  </header>
+
+  <main class="wrap narrow center" style="padding-top:56px">
+    <img class="notfound-logo" src="/logo.svg" alt="ThorHub" width="72" height="72" style="margin-bottom:16px;width:72px;height:72px" />
     <h1 class="notfound-code" style="display:block;justify-content:center">4<span>0</span>4</h1>
     <p class="sub">Halaman yang Anda cari tidak ditemukan.</p>
     <div class="row-actions" style="justify-content:center">
@@ -46,5 +90,6 @@
       </a>
     </div>
   </main>
+  <script defer src="/nav.js"></script>
 </body>
 </html>

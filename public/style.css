@@ -5,6 +5,12 @@
    ============================================================== */
 
 :root {
+  /* Safe-area (ponsel dengan poni / gesture bar) */
+  --sa-t: env(safe-area-inset-top, 0px);
+  --sa-r: env(safe-area-inset-right, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px);
+  --sa-l: env(safe-area-inset-left, 0px);
+
   /* Permukaan — hampir hitam, kontras rendah (kalem & profesional) */
   --bg: #0a0a0a;
   --bg-soft: #101010;
@@ -90,10 +96,14 @@ body {
   font-family: var(--sans);
   color: var(--text);
   min-height: 100vh;
+  min-height: 100dvh; /* lebih akurat di mobile (address bar dinamis) */
   line-height: 1.55;
   font-size: 15px;
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   background-color: var(--bg);
   background-image: radial-gradient(ellipse 80% 45% at 50% 0%, rgba(163, 230, 53, .055), transparent 70%);
   background-attachment: fixed;
@@ -175,6 +185,9 @@ input[type="checkbox"], input[type="radio"], [role="tab"] { cursor: pointer; }
   max-width: 1120px;
   margin: 0 auto;
   padding: var(--s-6) var(--s-4) var(--s-12);
+  padding-left: max(var(--s-4), var(--sa-l));
+  padding-right: max(var(--s-4), var(--sa-r));
+  padding-bottom: max(var(--s-12), var(--sa-b));
   animation: riseIn .4s var(--ease) both;
 }
 .narrow { max-width: 420px; }
@@ -193,6 +206,9 @@ input[type="checkbox"], input[type="radio"], [role="tab"] { cursor: pointer; }
   justify-content: space-between;
   gap: var(--s-3);
   padding: var(--s-3) var(--s-4);
+  padding-top: max(var(--s-3), var(--sa-t));
+  padding-left: max(var(--s-4), var(--sa-l));
+  padding-right: max(var(--s-4), var(--sa-r));
   background: rgba(10, 10, 10, .88);
   backdrop-filter: blur(12px) saturate(140%);
   -webkit-backdrop-filter: blur(12px) saturate(140%);
@@ -456,9 +472,14 @@ input, select, textarea {
   color: var(--text);
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
-  font-size: 15px;
+  /* 16px: mencegah iOS Safari melakukan zoom otomatis saat field difokuskan */
+  font-size: 16px;
   font-family: inherit;
   transition: border-color var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+/* Di layar besar, 16px terasa besar untuk input padat → kecilkan kembali */
+@media (min-width: 900px) {
+  input, select, textarea { font-size: 15px; }
 }
 input::placeholder { color: var(--muted-2); }
 input:focus, select:focus, textarea:focus {
@@ -529,11 +550,29 @@ input.mono { font-family: var(--mono); font-size: 13px; }
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain; /* jangan sampai memicu swipe-back browser */
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--panel);
+  /* Petunjuk visual bahwa tabel bisa digeser (khusus layar sempit) */
+  background-image:
+    linear-gradient(to right, var(--panel) 30%, transparent),
+    linear-gradient(to left, var(--panel) 30%, transparent),
+    linear-gradient(to right, rgba(163, 230, 53, .18), transparent),
+    linear-gradient(to left, rgba(163, 230, 53, .18), transparent);
+  background-position: left center, right center, left center, right center;
+  background-repeat: no-repeat;
+  background-size: 28px 100%, 28px 100%, 16px 100%, 16px 100%;
+  background-attachment: local, local, scroll, scroll;
 }
-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+/* Scrollbar tipis & konsisten (desktop) */
+.table-scroll { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+.table-scroll::-webkit-scrollbar { height: 8px; }
+.table-scroll::-webkit-scrollbar-track { background: transparent; }
+.table-scroll::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+.table-scroll::-webkit-scrollbar-thumb:hover { background: var(--line-2); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 520px; }
 th, td { text-align: left; padding: var(--s-3); border-bottom: 1px solid var(--border); white-space: nowrap; }
 th {
   color: var(--muted);
@@ -543,9 +582,13 @@ th {
   text-transform: uppercase;
   letter-spacing: .06em;
   background: var(--thead);
-  position: sticky;
-  top: 0;
   border-bottom: 1px solid var(--border-2);
+  white-space: nowrap;
+}
+/* Kolom pertama tabel tetap terlihat saat digeser di layar sempit */
+@media (max-width: 640px) {
+  table { font-size: 12.5px; }
+  th, td { padding: var(--s-2) var(--s-3); }
 }
 tbody tr { transition: background var(--t-fast) ease; }
 tbody tr:last-child td { border-bottom: none; }
@@ -1223,3 +1266,100 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 @media (prefers-reduced-motion: reduce) {
   .cc-aurora-svg, .cc-aurora-halo, .orbit-ring, .o-node .t { animation: none !important; }
 }
+
+/* ==============================================================
+   OPTIMASI RESPONSIF — hasil audit mobile & desktop
+   Ditambahkan paling akhir agar bisa menimpa aturan sebelumnya.
+   ============================================================== */
+
+/* Semua elemen form bawaan: pakai font sistem (hindari font 11px default browser) */
+button, input, select, textarea { font-family: inherit; }
+
+/* Perbaiki lebar gambar yang bisa meluber */
+img, svg { max-width: 100%; height: auto; }
+
+/* ---------------- Layar sangat kecil (≤ 380px) ---------------- */
+@media (max-width: 380px) {
+  :root { --s-4: 14px; --s-6: 20px; }
+  body { font-size: 14.5px; }
+  .brand .suffix { display: none; }          /* sembunyikan "· Admin" agar tidak berdesakan */
+  .stat .v { font-size: 18px; }
+  .hero h1 { font-size: 24px; }
+  .dash-head { gap: var(--s-2); }
+  .dash-avatar { width: 44px; height: 44px; font-size: 18px; }
+  .notfound-code { font-size: 64px; }
+}
+
+/* ---------------- Tablet & bawah (≤ 640px) ---------------- */
+@media (max-width: 640px) {
+  /* Tombol utama jadi selebar layar → lebih mudah dijangkau jempol */
+  .row-actions { gap: var(--s-2); }
+  .row-actions .btn { flex: 1 1 100%; }
+  .row-actions .btn.small { flex: 1 1 auto; }
+
+  /* Orbit: perkecil agar tidak memakan tinggi layar */
+  .orbit { --orbit-r: clamp(92px, 27vw, 112px); }
+  .orbit-core { width: 62px; height: 62px; }
+  .orbit-core img { width: 32px; height: 32px; }
+
+  /* Header dashboard: avatar & nama bertumpuk rapi */
+  .dash-head { align-items: flex-start; }
+  .truncate { max-width: 56vw; }
+
+  /* Tabel: beri ruang napas vertikal lebih kecil */
+  .models-table th, .models-table td { padding: var(--s-2) var(--s-3); }
+
+  /* Pratinjau kode: jangan sampai memaksa lebar halaman */
+  pre { font-size: 11.5px; padding: var(--s-3); }
+  .cmd pre { padding-right: var(--s-4); padding-top: 40px; }
+  .cmd > button { top: 8px; right: 8px; }
+
+  /* Kartu: padding lebih hemat */
+  .card { padding: var(--s-4); }
+
+  /* Tab: tetap bisa digeser, tab aktif lebih jelas */
+  .tabs { padding: 3px; gap: 2px; }
+  .tab { padding: var(--s-2) var(--s-3); font-size: 12.5px; }
+}
+
+/* ---------------- Sentuh: target minimal 44px ---------------- */
+@media (hover: none) and (pointer: coarse) {
+  .tab, .seg-btn, .app, .btn, .topbar nav a, .nav-toggle, [data-copy] {
+    min-height: var(--touch);
+  }
+  /* Efek hover tidak berguna di layar sentuh → matikan agar tidak "nyangkut" */
+  .stat:hover { background: var(--card); border-color: var(--border); }
+  .o-node:hover .o-logo { transform: none; }
+  /* Beri umpan balik saat ditekan */
+  .btn:active, .tab:active, .app:active { transform: scale(.985); }
+}
+
+/* ---------------- Desktop lebar ---------------- */
+@media (min-width: 1200px) {
+  .wrap { padding-left: var(--s-6); padding-right: var(--s-6); }
+  .stat-strip .cell { padding: var(--s-5); }
+}
+
+/* ---------------- Fokus keyboard yang jelas (aksesibilitas) ---------------- */
+:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---------------- Cetak ---------------- */
+@media print {
+  .topbar, .nav-toggle, .cc-aurora-svg, .tabs, .row-actions, .orbit { display: none !important; }
+  body { background: #fff; color: #000; }
+  .card, .stat, .table-scroll { border-color: #ccc; box-shadow: none; }
+}
+
+/* ---------------- Hormati preferensi pengguna ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  .chart-svg .bar { animation: none !important; }
+  .stagger > * { animation: none !important; }
+}
+
+/* ---------------- Format angka & pemotongan teks ---------------- */
+.stat .v, .o-node, .kv-row b, .chart-x, table td.num { font-variant-numeric: tabular-nums; }
+.cred-row, .mono, pre, .table-scroll { -webkit-overflow-scrolling: touch; }
