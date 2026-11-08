@@ -118,7 +118,8 @@ llm-gateway-express/
 │   └── nginx-llm-gateway.conf# Konfigurasi nginx (siap pakai)
 │
 ├── test/
-│   └── mock-provider.js      # Provider tiruan untuk uji tanpa kredit asli
+│   ├── mock-provider.js      # Provider tiruan untuk uji tanpa kredit asli
+│   └── verify-docs.js        # Verifikasi halaman /docs (tab, blok kode, tombol salin)
 └── data/
     └── gateway.db            # Database SQLite (dibuat otomatis)
 ```
@@ -219,16 +220,25 @@ berjalan. Berguna untuk pemantauan sekilas tanpa login.
 
 ### 6.2 Dokumentasi Member — `/docs`
 
-Halaman referensi terbuka (tanpa login) berisi:
+Halaman referensi terbuka (tanpa login), disusun dalam **5 tab** agar rapi dan mudah ditelusuri.
+Pilihan tab tersimpan (bisa di-deep-link lewat `?tab=sdk`, mis. `/docs?tab=aplikasi`).
 
-- **Base URL** yang otomatis terisi sesuai origin yang diakses
-- **Tabel daftar model** live — kolom: Model ID, Vendor, Kemampuan, Multiplier, **Status**
-  (● Aktif / ○ Nonaktif)
-- Fitur **cari model** (berdasarkan ID atau vendor) dan tombol **Muat Ulang**
-- Tombol **Pakai** pada tiap model → otomatis mengisi contoh kode & menyalin ID ke clipboard
-- Contoh kode: **cURL**, **Python (OpenAI SDK)**, **Streaming**, dan endpoint daftar model —
-  masing-masing dengan tombol **Salin**
-- Tabel kode error yang mungkin diterima pembeli
+| Tab | Isi |
+| --- | --- |
+| 🚀 **Mulai Cepat** | 3 langkah mulai, contoh **cURL**, **PowerShell**, dan **streaming** |
+| 🧠 **Daftar Model** | Tabel model live + pencarian + endpoint daftar model |
+| 💻 **SDK & Kode** | **Python**, **Node.js**, **LangChain**, **PHP**, **Go** |
+| 🔌 **Aplikasi Lain** | **VS Code (Cline/Roo/Continue)**, **terminal VS Code**, **Open WebUI**, **ChatBox/NextChat/Jan**, **Hermes**, variabel lingkungan **Linux/macOS** & **Windows** |
+| 📖 **Referensi** | Endpoint, perhitungan token & multiplier, format respons, tabel kode error, batasan |
+
+Fitur pendukung:
+
+- **Base URL** otomatis terisi sesuai origin yang diakses
+- **Tabel model** — kolom: Model ID, Vendor, Kemampuan, Multiplier, **Status** (● Aktif / ○ Nonaktif)
+- **Cari model** (ID atau vendor) + tombol **Muat Ulang**
+- Tombol **Pakai** pada tiap model → otomatis mengganti model di semua contoh kode & menyalin ID
+- Tombol **Salin** pada setiap blok kode
+- Navigasi tab bisa lewat **keyboard** (panah kiri/kanan)
 
 ### 6.3 Portal Member — `/portal`
 
@@ -438,12 +448,87 @@ print(resp.choices[0].message.content)
 
 Daftar model dari provider (butuh Sub-API Key). Bila provider offline, otomatis memakai snapshot.
 
-### 9.3 Format respons
+### 9.3 Integrasi dengan Aplikasi Pihak Ketiga
+
+Semua aplikasi yang mendukung **OpenAI-Compatible / Custom OpenAI Provider** bisa langsung
+dipakai. Isi 4 kolom berikut:
+
+| Kolom di aplikasi | Isi dengan |
+| --- | --- |
+| Provider / API Type | `OpenAI-Compatible` (Custom OpenAI) |
+| Base URL / API Host | `https://llm.thormarket.site/v1` |
+| API Key | Sub-API Key member (`sk-thor-...`) |
+| Model | `deepseek-v4-pro` (atau model lain dari daftar) |
+
+> Bila aplikasi menolak URL berakhiran `/v1` (versi lama kadang menambahkan sendiri),
+> coba isi **tanpa** `/v1`, lalu jalankan tes koneksi.
+
+#### VS Code (extension Cline / Roo Code / Continue)
+
+1. Buka **Settings** extension (ikon ⚙ pada panel extension).
+2. **API Provider** → pilih **OpenAI Compatible**.
+3. **Base URL** → `https://llm.thormarket.site/v1`
+4. **API Key** → `sk-thor-xxxxxxxx`
+5. **Model ID** → ketik manual, mis. `deepseek-v4-pro`
+
+Untuk coding, `kimi-k2.7-code` (multiplier 1×) paling hemat kuota; untuk analisis kompleks
+pakai `deepseek-v4-pro` (1.15×).
+
+#### Terminal VS Code
+
+Buka terminal dengan <kbd>Ctrl</kbd>+<kbd>`</kbd>, lalu jalankan cURL dari contoh di atas —
+cara tercepat mengetes koneksi tanpa extension.
+
+```bash
+curl https://llm.thormarket.site/v1/chat/completions \
+  -H "Authorization: Bearer sk-thor-xxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"Halo"}]}'
+```
+
+#### Open WebUI
+
+**Settings → Connections** → tombol **+** → isi **URL** `https://llm.thormarket.site/v1`
+dan **Key** `sk-thor-xxxxxxxx` → **Verify Connection** → **Save**.
+
+#### ChatBox / NextChat / Jan / LobeChat
+
+**Settings → Model Provider** → pilih **OpenAI** atau **Custom** → isi API Host & API Key
+→ tambahkan model `deepseek-v4-pro` secara manual.
+
+#### Hermes / framework agent
+
+Framework agent umumnya membaca variabel lingkungan standar:
+
+```env
+OPENAI_API_KEY=sk-thor-xxxxxxxx
+OPENAI_BASE_URL=https://llm.thormarket.site/v1
+OPENAI_MODEL=deepseek-v4-pro
+```
+
+#### Variabel lingkungan sistem
+
+```bash
+# Linux / macOS — tambahkan ke ~/.bashrc atau ~/.zshrc
+export OPENAI_API_KEY="sk-thor-xxxxxxxx"
+export OPENAI_BASE_URL="https://llm.thormarket.site/v1"
+```
+
+```powershell
+# Windows PowerShell
+$env:OPENAI_API_KEY = "sk-thor-xxxxxxxx"
+$env:OPENAI_BASE_URL = "https://llm.thormarket.site/v1"
+```
+
+Contoh kode lengkap untuk **Python, Node.js, LangChain, PHP, Go** tersedia di halaman
+`/docs` (tab **SDK & Kode**).
+
+### 9.4 Format respons
 
 Standar OpenAI: `choices[].message.content`, `usage.total_tokens`. Setiap token terpakai
 otomatis dipotong dari kuota member.
 
-### 9.4 Kode error
+### 9.5 Kode error
 
 | HTTP | Situasi | `code` di body |
 | --- | --- | --- |

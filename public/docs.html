@@ -28,66 +28,279 @@
 
   <main class="wrap">
     <h1>Dokumentasi <span class="grad">API</span></h1>
-    <p class="sub">ThorHub bersifat <b>OpenAI-compatible</b>. Gunakan Sub-API Key Anda sebagai Bearer token.</p>
+    <p class="sub">ThorHub bersifat <b>OpenAI-compatible</b> — cukup ganti <code>base_url</code> dan masukkan Sub-API Key Anda.</p>
 
+    <!-- Base URL (selalu terlihat) -->
     <div class="card">
       <h2>Base URL</h2>
       <div class="mono" style="word-break:break-all" id="base-url">…</div>
+      <p class="muted mt-3" style="margin-bottom:0">Contoh key: <code>sk-thor-xxxxxxxxxxxx</code> (dari admin)</p>
     </div>
 
-    <div class="card">
-      <h2>Daftar Model Tersedia</h2>
-      <p class="muted" id="models-meta">Memuat…</p>
-      <div class="row-actions" style="margin-top:0;margin-bottom:12px">
-        <input id="search" placeholder="Cari model…" style="max-width:280px" class="w-full" />
-        <button class="btn small" id="btn-refresh">Muat Ulang</button>
+    <!-- ============ TAB ============ -->
+    <div class="tabs" role="tablist" aria-label="Bagian dokumentasi">
+      <button class="tab active" role="tab" data-tab="mulai" aria-selected="true">🚀 Mulai Cepat</button>
+      <button class="tab" role="tab" data-tab="model" aria-selected="false">🧠 Daftar Model</button>
+      <button class="tab" role="tab" data-tab="sdk" aria-selected="false">💻 SDK &amp; Kode</button>
+      <button class="tab" role="tab" data-tab="aplikasi" aria-selected="false">🔌 Aplikasi Lain</button>
+      <button class="tab" role="tab" data-tab="referensi" aria-selected="false">📖 Referensi</button>
+    </div>
+
+    <!-- ============ PANEL: MULAI CEPAT ============ -->
+    <section class="tab-panel active" id="panel-mulai" role="tabpanel">
+      <div class="card">
+        <h2>3 Langkah Mulai</h2>
+        <ol class="steps">
+          <li><b>Dapatkan Sub-API Key</b> — hubungi admin, format <code>sk-thor-…</code></li>
+          <li><b>Ganti Base URL</b> aplikasi/SDK Anda ke <span class="mono" id="base-url-2">…</span></li>
+          <li><b>Panggil API</b> dengan model apa saja dari daftar (mis. <code>deepseek-v4-pro</code>)</li>
+        </ol>
       </div>
-      <div id="models-wrap"><p class="muted">Memuat daftar model…</p></div>
-    </div>
 
-    <div class="card">
-      <h2>1. Chat — cURL</h2>
-      <pre id="ex-curl">…</pre>
-      <button class="btn small" data-copy="ex-curl">Salin</button>
-    </div>
-
-    <div class="card">
-      <h2>2. Chat — Python (OpenAI SDK)</h2>
-      <pre id="ex-python">…</pre>
-      <button class="btn small" data-copy="ex-python">Salin</button>
-    </div>
-
-    <div class="card">
-      <h2>3. Chat — Streaming</h2>
-      <pre id="ex-stream">…</pre>
-      <button class="btn small" data-copy="ex-stream">Salin</button>
-    </div>
-
-    <div class="card">
-      <h2>4. Daftar Model (endpoint)</h2>
-      <pre id="ex-models">…</pre>
-      <button class="btn small" data-copy="ex-models">Salin</button>
-    </div>
-
-    <div class="card">
-      <h2>Format Respons</h2>
-      <p class="muted">Standar OpenAI: <code>choices[].message.content</code>, <code>usage.total_tokens</code>. Setiap token yang terpakai otomatis dipotong dari kuota Anda.</p>
-      <h2 style="margin-top:16px">Kode Error</h2>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr><th>HTTP</th><th>Code</th><th>Artinya</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>401</td><td class="mono">invalid_api_key</td><td>Sub-API Key salah/kosong</td></tr>
-            <tr><td>403</td><td class="mono">insufficient_quota</td><td>Kuota token habis</td></tr>
-            <tr><td>403</td><td class="mono">key_disabled</td><td>Key dinonaktifkan admin</td></tr>
-            <tr><td>429</td><td class="mono">rate_limited</td><td>Terlalu banyak permintaan per menit</td></tr>
-            <tr><td>502</td><td class="mono">provider_error</td><td>Provider upstream bermasalah</td></tr>
-          </tbody>
-        </table>
+      <div class="card">
+        <h2>Tes Cepat — Terminal (cURL)</h2>
+        <p class="muted">Jalankan di terminal/command prompt mana saja. Cocok untuk memastikan key &amp; koneksi bekerja.</p>
+        <pre id="ex-curl">…</pre>
+        <button class="btn small" data-copy="ex-curl">Salin</button>
       </div>
-    </div>
+
+      <div class="card">
+        <h2>Windows PowerShell</h2>
+        <p class="muted">Bila memakai PowerShell (mis. di Windows), tanda kutip &amp; baris sambung berbeda:</p>
+        <pre id="ex-powershell">…</pre>
+        <button class="btn small" data-copy="ex-powershell">Salin</button>
+      </div>
+
+      <div class="card">
+        <h2>Streaming (respons bertahap)</h2>
+        <p class="muted">Tambahkan <code>"stream": true</code> untuk menerima jawaban kata per kata.</p>
+        <pre id="ex-stream">…</pre>
+        <button class="btn small" data-copy="ex-stream">Salin</button>
+      </div>
+    </section>
+
+    <!-- ============ PANEL: DAFTAR MODEL ============ -->
+    <section class="tab-panel" id="panel-model" role="tabpanel">
+      <div class="card">
+        <h2>Model Tersedia</h2>
+        <p class="muted" id="models-meta">Memuat…</p>
+        <div class="row-actions" style="margin-top:0;margin-bottom:12px">
+          <input id="search" placeholder="Cari model / vendor…" style="max-width:280px" class="w-full" />
+          <button class="btn small" id="btn-refresh">Muat Ulang</button>
+        </div>
+        <p class="muted" style="font-size:13px;margin-top:0">
+          <b>Multiplier</b> = pengali konsumsi token terhadap kuota. Contoh: model <code>1.5×</code>
+          dengan 2.000 token terpakai → kuota berkurang 3.000 token.
+        </p>
+        <div id="models-wrap"><p class="muted">Memuat daftar model…</p></div>
+      </div>
+
+      <div class="card">
+        <h2>Cek Daftar Model Lewat API</h2>
+        <pre id="ex-models">…</pre>
+        <button class="btn small" data-copy="ex-models">Salin</button>
+      </div>
+    </section>
+
+    <!-- ============ PANEL: SDK & KODE ============ -->
+    <section class="tab-panel" id="panel-sdk" role="tabpanel">
+      <div class="card">
+        <h2>Python — OpenAI SDK</h2>
+        <p class="muted">Pasang dulu: <code>pip install openai</code></p>
+        <pre id="ex-python">…</pre>
+        <button class="btn small" data-copy="ex-python">Salin</button>
+      </div>
+
+      <div class="card">
+        <h2>Node.js / JavaScript — OpenAI SDK</h2>
+        <p class="muted">Pasang dulu: <code>npm install openai</code></p>
+        <pre id="ex-node">…</pre>
+        <button class="btn small" data-copy="ex-node">Salin</button>
+      </div>
+
+      <div class="card">
+        <h2>Python — LangChain</h2>
+        <p class="muted">Pasang dulu: <code>pip install langchain-openai</code></p>
+        <pre id="ex-langchain">…</pre>
+        <button class="btn small" data-copy="ex-langchain">Salin</button>
+      </div>
+
+      <div class="card">
+        <h2>PHP — cURL</h2>
+        <pre id="ex-php">…</pre>
+        <button class="btn small" data-copy="ex-php">Salin</button>
+      </div>
+
+      <div class="card">
+        <h2>Go — net/http</h2>
+        <pre id="ex-go">…</pre>
+        <button class="btn small" data-copy="ex-go">Salin</button>
+      </div>
+    </section>
+
+    <!-- ============ PANEL: APLIKASI LAIN ============ -->
+    <section class="tab-panel" id="panel-aplikasi" role="tabpanel">
+      <div class="card">
+        <h2>Isi Pengaturan yang Sama di Semua Aplikasi</h2>
+        <p class="muted">Hampir semua aplikasi AI punya 3–4 kolom ini. Isi dengan nilai berikut:</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Kolom di aplikasi</th><th>Isi dengan</th></tr></thead>
+            <tbody>
+              <tr><td>Provider / API Type</td><td class="mono">OpenAI-Compatible / Custom OpenAI</td></tr>
+              <tr><td>Base URL / API Host</td><td class="mono" id="cfg-base">…</td></tr>
+              <tr><td>API Key</td><td class="mono">sk-thor-xxxxxxxx</td></tr>
+              <tr><td>Model</td><td class="mono">deepseek-v4-pro</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="alert ok mt-4" style="margin-bottom:0">
+          💡 Bila aplikasi menolak URL berakhiran <code>/v1</code>, coba isi <b>tanpa</b> <code>/v1</code>
+          (beberapa versi menambahkan sendiri), lalu jalankan tes koneksi.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🖥️ VS Code — Extension Cline / Roo Code / Continue</h2>
+        <p class="muted">
+          Extension coding AI di VS Code. Semuanya mendukung provider OpenAI-compatible:
+        </p>
+        <ol class="steps">
+          <li>Buka <b>Settings</b> extension (ikon ⚙ di panel extension).</li>
+          <li><b>API Provider</b> → pilih <b>OpenAI Compatible</b>.</li>
+          <li><b>Base URL</b> → <span class="mono" id="cfg-vscode">…</span></li>
+          <li><b>API Key</b> → <code>sk-thor-xxxxxxxx</code></li>
+          <li><b>Model ID</b> → mis. <code>deepseek-v4-pro</code> (ketik manual bila tak ada di daftar)</li>
+        </ol>
+        <div class="alert mt-3">
+          <b>Tips VS Code:</b> untuk coding, model <code>kimi-k2.7-code</code> (multiplier 1×) paling
+          hemat kuota. Untuk analisis kompleks, <code>deepseek-v4-pro</code> (1.15×).
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>⌨️ VS Code — Terminal Terintegrasi</h2>
+        <p class="muted">
+          Buka terminal di VS Code dengan <kbd>Ctrl</kbd>+<kbd>`</kbd> (backtick), lalu jalankan
+          perintah cURL dari tab <b>Mulai Cepat</b>. Ini cara tercepat mengetes koneksi tanpa extension.
+        </p>
+        <pre id="ex-vscode-term">…</pre>
+        <button class="btn small" data-copy="ex-vscode-term">Salin</button>
+      </div>
+
+      <div class="card">
+        <h2>🌐 Open WebUI</h2>
+        <ol class="steps">
+          <li>Masuk sebagai admin → <b>Settings → Connections</b></li>
+          <li>Klik <b>+</b> (Add OpenAI API Connection)</li>
+          <li><b>URL</b> → <span class="mono" id="cfg-owui">…</span></li>
+          <li><b>Key</b> → <code>sk-thor-xxxxxxxx</code></li>
+          <li>Klik <b>Verify Connection</b> → <b>Save</b> → model muncul di dropdown</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>💬 ChatBox / NextChat / Jan / LobeChat</h2>
+        <p class="muted">Aplikasi chat desktop/mobile. Pengaturannya sama:</p>
+        <ol class="steps">
+          <li><b>Settings → Model Provider</b> → pilih <b>OpenAI</b> atau <b>Custom</b></li>
+          <li><b>API Host / Base URL</b> → <span class="mono" id="cfg-chatbox">…</span></li>
+          <li><b>API Key</b> → <code>sk-thor-xxxxxxxx</code></li>
+          <li><b>Model</b> → ketik <code>deepseek-v4-pro</code> (atau model lain dari tab Daftar Model)</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>🤖 Hermes / Agent Framework</h2>
+        <p class="muted">
+          Untuk framework agent yang memakai konfigurasi OpenAI-compatible (env var atau config file):
+        </p>
+        <pre id="ex-hermes">…</pre>
+        <button class="btn small" data-copy="ex-hermes">Salin</button>
+      </div>
+
+      <div class="card">
+        <h2>🐧 Terminal Linux / macOS — Variabel Lingkungan</h2>
+        <p class="muted">Set sekali, dipakai oleh banyak tools yang membaca <code>OPENAI_*</code>:</p>
+        <pre id="ex-env">…</pre>
+        <button class="btn small" data-copy="ex-env">Salin</button>
+      </div>
+
+      <div class="card">
+        <h2>🪟 Windows (CMD / PowerShell) — Variabel Lingkungan</h2>
+        <pre id="ex-env-win">…</pre>
+        <button class="btn small" data-copy="ex-env-win">Salin</button>
+      </div>
+    </section>
+
+    <!-- ============ PANEL: REFERENSI ============ -->
+    <section class="tab-panel" id="panel-referensi" role="tabpanel">
+      <div class="card">
+        <h2>Endpoint Tersedia</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Metode</th><th>Endpoint</th><th>Keterangan</th></tr></thead>
+            <tbody>
+              <tr><td>POST</td><td class="mono">/v1/chat/completions</td><td>Chat (JSON &amp; streaming SSE)</td></tr>
+              <tr><td>GET</td><td class="mono">/v1/models</td><td>Daftar model tersedia</td></tr>
+              <tr><td>GET</td><td class="mono">/health</td><td>Health check gateway</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted mt-4" style="margin-bottom:0">
+          Autentikasi: header <code>Authorization: Bearer sk-thor-xxx</code>
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>Perhitungan Token &amp; Multiplier</h2>
+        <p class="muted">Setiap request dipotong dari kuota dengan rumus:</p>
+        <pre>(prompt_tokens + completion_tokens) × multiplier</pre>
+        <p class="muted">
+          Contoh: 800 prompt + 1.200 completion pada model <code>1.5×</code> →
+          <code>(800 + 1200) × 1.5 = 3.000</code> token dipotong.
+        </p>
+        <p class="muted" style="margin-bottom:0">
+          Request yang <b>gagal</b> sebelum provider menjawab (timeout/error) <b>tidak dihitung</b>.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>Format Respons</h2>
+        <p class="muted">Standar OpenAI: <code>choices[].message.content</code>, <code>usage.total_tokens</code>.</p>
+        <pre id="ex-resp">…</pre>
+      </div>
+
+      <div class="card">
+        <h2>Kode Error</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>HTTP</th><th>Code</th><th>Artinya</th><th>Solusi</th></tr></thead>
+            <tbody>
+              <tr><td>400</td><td class="mono">invalid_request_error</td><td>Body bukan JSON valid</td><td>Periksa format JSON</td></tr>
+              <tr><td>401</td><td class="mono">missing_api_key</td><td>Header Authorization kosong</td><td>Tambahkan <code>Authorization: Bearer …</code></td></tr>
+              <tr><td>401</td><td class="mono">invalid_api_key</td><td>Key salah / tidak terdaftar</td><td>Periksa key Anda</td></tr>
+              <tr><td>403</td><td class="mono">key_disabled</td><td>Key dinonaktifkan admin</td><td>Hubungi admin</td></tr>
+              <tr><td>403</td><td class="mono">quota_exceeded</td><td>Kuota token habis</td><td>Lakukan top-up</td></tr>
+              <tr><td>503</td><td class="mono">queue_timeout</td><td>Mengantre &gt; 60 detik</td><td>Coba lagi nanti</td></tr>
+              <tr><td>504</td><td class="mono">upstream_timeout</td><td>Provider tidak merespons</td><td>Coba lagi</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <pre id="ex-err" class="mt-4">…</pre>
+      </div>
+
+      <div class="card">
+        <h2>Batasan &amp; Catatan</h2>
+        <ul class="steps">
+          <li>Gateway membatasi <b>25 request / 60 detik</b> dan <b>maks 3 paralel</b>. Kelebihannya mengantre (maks 60 detik), bukan ditolak.</li>
+          <li>Timeout request ke provider: <b>120 detik</b>.</li>
+          <li>Body request maksimal <b>8 MB</b>.</li>
+          <li>Semua parameter OpenAI (<code>temperature</code>, <code>max_tokens</code>, <code>tools</code>, dst.) diteruskan apa adanya.</li>
+          <li>Kuota dihitung per key — hubungi admin untuk top-up.</li>
+        </ul>
+      </div>
+    </section>
   </main>
 
   <script defer src="/nav.js"></script>

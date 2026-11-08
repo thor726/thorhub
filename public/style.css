@@ -544,6 +544,72 @@ td { vertical-align: middle; }
 .models-table td .tag + .tag { margin-left: var(--s-1); }
 
 /* ==============================================================
+   TAB (halaman /docs) — agar dokumentasi tidak berantakan
+   ============================================================== */
+.tabs {
+  display: flex;
+  gap: var(--s-2);
+  margin: var(--s-5) 0 var(--s-5);
+  padding: var(--s-1);
+  background: rgba(12, 18, 30, .7);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.tabs::-webkit-scrollbar { height: 4px; }
+.tabs::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
+
+.tab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 40px;
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color .18s ease, background .18s ease, border-color .18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab:hover { color: var(--text); background: rgba(91, 140, 255, .08); }
+.tab.active {
+  color: #fff;
+  background: var(--grad-brand);
+  border-color: transparent;
+  box-shadow: 0 4px 16px rgba(91, 140, 255, .3);
+}
+
+/* Panel: hanya yang aktif yang tampil */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; animation: fadeIn .28s ease both; }
+
+/* Daftar langkah bernomor */
+.steps { margin: 0; padding-left: var(--s-5); }
+.steps li { margin-bottom: var(--s-2); line-height: 1.6; }
+.steps li:last-child { margin-bottom: 0; }
+
+kbd {
+  display: inline-block;
+  padding: 2px var(--s-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  background: #0c1220;
+  border: 1px solid var(--border-hover);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  color: var(--text);
+}
+
+/* ==============================================================
    ALERT
    ============================================================== */
 .alert {
