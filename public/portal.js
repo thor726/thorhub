@@ -59,7 +59,7 @@ async function boot() {
 `curl ${base}/v1/chat/completions \\
   -H "Authorization: Bearer ${d.api_key}" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Halo"}]}'`;
+  -d '{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"Halo"}]}'`;
   $("py-example").textContent =
 `from openai import OpenAI
 
@@ -69,7 +69,7 @@ client = OpenAI(
 )
 
 resp = client.chat.completions.create(
-    model="gpt-4o-mini",
+    model="deepseek-v4-pro",
     messages=[{"role": "user", "content": "Halo"}],
 )
 print(resp.choices[0].message.content)`;

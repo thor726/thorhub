@@ -17,6 +17,8 @@ const crypto = require("crypto");
 const config = require("../config");
 const db = require("../db");
 const session = require("../lib/session");
+const models = require("../lib/models");
+const DEFAULT_MODEL = models.DEFAULT_MODEL;
 
 // Cache sederhana daftar model (hindari spam ke provider tiap request)
 let modelsCache = { at: 0, data: null };
@@ -57,11 +59,18 @@ function requireMemberSession(req, res, next) {
 // ---------------------------------------------------------------
 // DAFTAR MODEL (publik) — dokumen publik, tanpa auth
 // ---------------------------------------------------------------
-router.get("/models", async (_req, res) => {
+router.get("/models", async (req, res) => {
+  // Parameter opsional: ?all=1 (tampilkan juga yang nonaktif), ?vendor=DeepSeek
+  const showAll = req.query.all === "1" || req.query.all === "true";
+  const vendorFilter = (req.query.vendor || "").toString().trim().toLowerCase();
+
   // Pakai cache bila masih segar
   if (modelsCache.data && Date.now() - modelsCache.at < MODELS_TTL_MS) {
-    return res.json({ data: modelsCache.data, cached: true });
+    return res.json(buildPayload(modelsCache.data, showAll, vendorFilter, { cached: true }));
   }
+
+  let list = null;
+  let stale = false;
   try {
     const url = `${config.targetBaseUrl.replace(/\/$/, "")}/models`;
     const r = await fetch(url, {
@@ -70,20 +79,35 @@ router.get("/models", async (_req, res) => {
     });
     if (!r.ok) throw new Error(`Provider membalas HTTP ${r.status}`);
     const j = await r.json();
-    const all = (j && j.data) || [];
-    // Ambil hanya yang tersedia & aktif
-    const available = all
-      .filter((m) => m.available && m.enabled)
-      .map((m) => ({ id: m.id, vision: !!m.vision }))
-      .sort((a, b) => a.id.localeCompare(b.id));
-    modelsCache = { at: Date.now(), data: available };
-    res.json({ data: available, cached: false });
+    list = models.normalizeProviderModels(j && j.data);
+    modelsCache = { at: Date.now(), data: list };
   } catch (e) {
-    // Bila gagal & ada cache lama, kirim cache lama
-    if (modelsCache.data) return res.json({ data: modelsCache.data, cached: true, stale: true });
-    res.status(502).json({ error: { message: `Gagal mengambil daftar model: ${e.message}`, code: "provider_error" } });
+    // Fallback: pakai snapshot lokal dari docs resmi, atau cache lama bila ada
+    list = modelsCache.data || models.MODELS;
+    stale = true;
   }
+
+  res.json(buildPayload(list, showAll, vendorFilter, { cached: !!modelsCache.data && stale, stale }));
 });
+
+/** Susun respons daftar model sesuai filter (aktif saja / semua, per vendor). */
+function buildPayload(list, showAll, vendorFilter, extra) {
+  const filtered = list
+    .filter((m) => showAll || m.active)
+    .filter((m) => !vendorFilter || String(m.vendor).toLowerCase() === vendorFilter)
+    .sort((a, b) => a.vendor.localeCompare(b.vendor) || a.id.localeCompare(b.id));
+  return {
+    data: filtered,
+    meta: {
+      total: list.length,
+      active: list.filter((m) => m.active).length,
+      returned: filtered.length,
+      vendors: models.VENDORS,
+      default_model: DEFAULT_MODEL,
+    },
+    ...extra,
+  };
+}
 
 // ---------------------------------------------------------------
 // ADMIN — login / logout / me

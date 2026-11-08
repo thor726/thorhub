@@ -6,6 +6,7 @@ const express = require("express");
 const config = require("../config");
 const limiter = require("../services/limiter");
 const proxy = require("../services/proxy");
+const models = require("../lib/models");
 const { authenticateSubKey } = require("../middleware/auth");
 
 const router = express.Router();
@@ -54,8 +55,18 @@ router.get("/models", authenticateSubKey, async (_req, res) => {
     }
     res.status(response.status).json(body);
   } catch (err) {
-    res.status(502).json({
-      error: { message: `Gagal menghubungi provider utama: ${err.message}`, type: "upstream_error" },
+    // Provider tidak bisa dihubungi → sajikan snapshot resmi agar klien tetap jalan
+    res.json({
+      object: "list",
+      data: models.activeModels().map((m) => ({
+        id: m.id,
+        object: "model",
+        owned_by: m.vendor,
+        vision: m.vision,
+        enabled: true,
+        available: true,
+      })),
+      gateway_fallback: true,
     });
   }
 });
