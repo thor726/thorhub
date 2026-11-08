@@ -988,7 +988,20 @@ pre:hover { border-color: var(--border-2); }
 }
 .o-node:hover { border-color: var(--lime-line); color: var(--lime); }
 /* Label berputar balik supaya teks tetap tegak */
-.o-node .t { animation: orbit-ccw 44s linear infinite; }
+.o-node .t { animation: orbit-ccw 44s linear infinite; display: grid; place-items: center; width: 100%; height: 100%; }
+
+/* Logo brand di dalam simpul — monokrom, ikut warna teks */
+.o-node .o-logo {
+  width: 26px;
+  height: 26px;
+  fill: var(--text-body);
+  stroke: none;
+  transition: fill var(--t) ease, transform var(--t) ease;
+}
+.o-node.sm .o-logo { width: 21px; height: 21px; }
+.o-node:hover .o-logo { fill: var(--lime); transform: scale(1.08); }
+/* Inisial (cadangan bila logo tak tersedia) */
+.o-node .o-initial { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .02em; color: var(--text-body); }
 .orbit-ring.rev .o-node { transform: rotate(var(--a)) translateY(calc(-1 * var(--orbit-r))) rotate(calc(-1 * var(--a))); }
 .orbit-ring.rev .o-node .t { animation: orbit-cw 34s linear infinite; }
 

@@ -196,6 +196,7 @@
   </main>
 
   <script defer src="/nav.js"></script>
+  <script src="/vendor-logos.js"></script>
   <script>
     /* Beranda — semua angka berasal dari endpoint nyata (/health & /portal/models). */
     const $ = (id) => document.getElementById(id);
@@ -242,15 +243,17 @@
           .map((v) => '<span class="chip">' + String(v).toUpperCase() + "</span>")
           .join("");
 
-        // Simpul orbit: 5 vendor pertama di ring luar, sisanya di ring dalam.
+        // Simpul orbit: pakai LOGO brand. "Lainnya" bukan brand → hanya tampil di chip.
+        const brand = vendors.filter((v) => String(v).toLowerCase() !== "lainnya");
+        const half = Math.ceil(brand.length / 2);
+        const outer = brand.slice(0, half);
+        const inner = brand.slice(half);
         const a = (i, n) => (360 / n) * i;
-        const outer = vendors.slice(0, 5);
-        const inner = vendors.slice(5, 11);
         $("orbit-ring").innerHTML = outer
-          .map((v, i) => `<div class="o-node" style="--a:${a(i, outer.length)}deg"><span class="t">${String(v).toUpperCase()}</span></div>`)
+          .map((v, i) => window.simpulOrbit(v, a(i, outer.length), false))
           .join("");
         $("orbit-ring-rev").innerHTML = inner
-          .map((v, i) => `<div class="o-node" style="--a:${a(i, inner.length)}deg"><span class="t">${String(v).toUpperCase()}</span></div>`)
+          .map((v, i) => window.simpulOrbit(v, a(i, inner.length), true))
           .join("");
       } catch {
         $("live-models").textContent = "—";
