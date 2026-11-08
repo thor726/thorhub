@@ -18,7 +18,9 @@ const config = {
   adminPassword: process.env.ADMIN_PASSWORD || "",
   queueWaitTimeoutMs: intOr(process.env.QUEUE_WAIT_TIMEOUT_MS, 60_000),
   upstreamTimeoutMs: intOr(process.env.UPSTREAM_TIMEOUT_MS, 120_000),
-  injectStreamUsage: String(process.env.INJECT_STREAM_USAGE || "false").toLowerCase() === "true",
+  // Default TRUE (aman): memaksa include_usage pada stream agar token tidak
+  // luput dihitung. Set "false" hanya bila provider menolak stream_options.
+  injectStreamUsage: String(process.env.INJECT_STREAM_USAGE ?? "true").toLowerCase() !== "false",
 };
 
 if (!config.masterApiKey) {

@@ -7,12 +7,23 @@
  *
  * Pemakaian:
  *   node test/check-endpoints.js [BASE_URL]
- * Default BASE_URL: https://llm.thormarket.site
+ * Default BASE_URL: http://127.0.0.1:3000  (LOKAL)
+ *
+ * ⚠️ PERINGATAN KUOTA
+ *   Uji ini benar-benar memanggil endpoint. Bila BASE diarahkan ke domain
+ *   PRODUKSI, request ke /v1/chat/completions akan menembus provider asli dan
+ *   MENGURANGI kuota MASTER_API_KEY yang nyata. Karena itu default-nya LOKAL.
+ *
+ *   Untuk uji bebas-kredit: jalankan mock provider + gateway kedua lalu arahkan
+ *   BASE ke sana, mis.
+ *     node test/mock-provider.js &                          # port 9999
+ *     PORT=7799 TARGET_API_BASE_URL=http://127.0.0.1:9999/v1 node src/server.js &
+ *     node test/check-endpoints.js http://127.0.0.1:7799
  */
 require("dotenv").config();
 const db = require("../src/db");
 
-const BASE = (process.argv[2] || "https://llm.thormarket.site").replace(/\/+$/, "");
+const BASE = (process.argv[2] || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const ADMIN_KEY = process.env.ADMIN_API_KEY || "";
 const ADMIN_PASS = process.env.ADMIN_PASSWORD || "";
 const MASTER = process.env.MASTER_API_KEY || "";
@@ -20,6 +31,28 @@ const MASTER = process.env.MASTER_API_KEY || "";
 // API key member aktif pertama (untuk uji /v1/*)
 const member = db.prepare("SELECT api_key FROM api_keys WHERE is_active = 1 LIMIT 1").get();
 const MEMBER_KEY = member ? member.api_key : "";
+
+// Panggilan yang menghasilkan token (chat/messages) HANYA dijalankan otomatis
+// bila AMAN, atau bila diizinkan eksplisit lewat --paksa / IZINKAN_KUOTA=1.
+//
+// PENTING: "BASE lokal" saja TIDAK cukup. Gateway di localhost pun meneruskan
+// ke TARGET_API_BASE_URL miliknya sendiri (dibaca dari .env di mesin yang sama).
+// Jadi kita juga memeriksa ke mana gateway itu menembak: aman hanya bila
+// upstream-nya juga mock/lokal (mis. dipakai bersama test/check-multiplier.js).
+const cocokLokal = (u) => /^(https?:\/\/)?(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\])(:\d+)?/i.test(String(u || ""));
+const TARGET = process.env.TARGET_API_BASE_URL || "";
+const BASE_LOKAL = cocokLokal(BASE);
+const TARGET_LOKAL = cocokLokal(TARGET);
+const PAKSA = process.argv.includes("--paksa") || process.env.IZINKAN_KUOTA === "1";
+const BOLEH_PANGGIL_PROVIDER = PAKSA || (BASE_LOKAL && TARGET_LOKAL);
+
+if (!BOLEH_PANGGIL_PROVIDER) {
+  console.log("⚠  Panggilan yang menghasilkan token akan DILEWATI (kuota provider aman).");
+  console.log(`   BASE   = ${BASE}        -> ${BASE_LOKAL ? "lokal" : "BUKAN lokal"}`);
+  console.log(`   TARGET = ${TARGET || "(kosong)"}  -> ${TARGET_LOKAL ? "lokal" : "BUKAN lokal"}`);
+  console.log("   Agar ikut diuji: arahkan gateway ke mock (lihat bagian atas berkas)");
+  console.log("   atau jalankan dengan --paksa / IZINKAN_KUOTA=1 (MEMBAKAR kuota asli).\n");
+}
 
 const results = [];
 async function test(nama, metode, path, { headers = {}, body, expect = [], catat = true } = {}) {
@@ -67,42 +100,59 @@ async function test(nama, metode, path, { headers = {}, body, expect = [], catat
   // ---------- 2. /v1 (auth member) ----------
   console.log("\n2) API pembeli (/v1, butuh Bearer member key)");
   const authMem = { Authorization: `Bearer ${MEMBER_KEY}`, "Content-Type": "application/json" };
-  await test("v1/models", "GET", "/v1/models", { headers: authMem, expect: [200] });
+  if (!MEMBER_KEY) {
+    // Tidak ada satu pun API key member aktif di database. Ini kondisi yang SAH
+    // (mis. DB baru dibersihkan), jadi cukup dilewati — bukan kegagalan uji.
+    console.log("  [ · ] (lewat) uji /v1 — belum ada API key member aktif di database.");
+    console.log("       Terbitkan key dulu lewat panel admin, atau uji via mock provider.");
+  } else {
+    await test("v1/models", "GET", "/v1/models", { headers: authMem, expect: [200] });
+  }
   await test("v1/models TANPA auth (harus 401)", "GET", "/v1/models", { expect: [401] });
-  await test("v1/chat body invalid (harus 400)", "POST", "/v1/chat/completions", { headers: authMem, body: [], expect: [400] });
-  // chat asli (mungkin butuh kuota provider; terima 200/4xx/5xx dari upstream)
-  await test("v1/chat/completions", "POST", "/v1/chat/completions", {
-    headers: authMem,
-    body: { model: "deepseek-v4-pro", messages: [{ role: "user", content: "ping" }], max_tokens: 5 },
-    expect: [200, 400, 401, 402, 403, 404, 429, 500, 502, 503, 504],
-  });
-  await test("v1/messages", "POST", "/v1/messages", {
-    headers: authMem,
-    body: { model: "claude-3-5-sonnet", max_tokens: 5, messages: [{ role: "user", content: "ping" }] },
-    expect: [200, 400, 401, 402, 403, 404, 429, 500, 502, 503, 504],
-  });
-  await test("v1/messages/count_tokens", "POST", "/v1/messages/count_tokens", {
-    headers: authMem,
-    body: { model: "claude-3-5-sonnet", messages: [{ role: "user", content: "ping" }] },
-    expect: [200, 400, 401, 402, 403, 404, 429, 500, 502, 503, 504],
-  });
+  if (MEMBER_KEY) {
+    await test("v1/chat body invalid (harus 400)", "POST", "/v1/chat/completions", { headers: authMem, body: [], expect: [400] });
+  }
+  // Panggilan di bawah ini MENGHASILKAN TOKEN → hanya dijalankan bila diizinkan.
+  if (BOLEH_PANGGIL_PROVIDER) {
+    await test("v1/chat/completions", "POST", "/v1/chat/completions", {
+      headers: authMem,
+      body: { model: "deepseek-v4-pro", messages: [{ role: "user", content: "ping" }], max_tokens: 5 },
+      expect: [200, 400, 401, 402, 403, 404, 429, 500, 502, 503, 504],
+    });
+    await test("v1/messages", "POST", "/v1/messages", {
+      headers: authMem,
+      body: { model: "claude-3-5-sonnet", max_tokens: 5, messages: [{ role: "user", content: "ping" }] },
+      expect: [200, 400, 401, 402, 403, 404, 429, 500, 502, 503, 504],
+    });
+    await test("v1/messages/count_tokens", "POST", "/v1/messages/count_tokens", {
+      headers: authMem,
+      body: { model: "claude-3-5-sonnet", messages: [{ role: "user", content: "ping" }] },
+      expect: [200, 400, 401, 402, 403, 404, 429, 500, 502, 503, 504],
+    });
+  } else {
+    console.log("  [ · ] (lewat) v1/chat, v1/messages, count_tokens — tidak menembak provider (kuota aman)");
+  }
 
   // ---------- 3. Portal member (butuh sesi) ----------
   console.log("\n3) Portal member (sesi)");
   await test("portal/models (publik)", "GET", "/portal/models?all=1", { expect: [200] });
   await test("portal/member/me TANPA sesi (401)", "GET", "/portal/member/me", { expect: [401] });
-  const login = await fetch(BASE + "/portal/member/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_key: MEMBER_KEY }),
-    signal: AbortSignal.timeout(15000),
-  }).catch(() => null);
   let memberCookie = "";
-  if (login) {
-    const sc = login.headers.get("set-cookie") || "";
-    memberCookie = sc.split(";")[0];
-    console.log(`  [ ${login.ok ? "OK " : "!! "}] POST   /portal/member/login                         -> ${login.status}`);
-    results.push({ nama: "member login", metode: "POST", path: "/portal/member/login", status: login.status, ok: login.ok });
+  if (MEMBER_KEY) {
+    const login = await fetch(BASE + "/portal/member/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: MEMBER_KEY }),
+      signal: AbortSignal.timeout(15000),
+    }).catch(() => null);
+    if (login) {
+      const sc = login.headers.get("set-cookie") || "";
+      memberCookie = sc.split(";")[0];
+      console.log(`  [ ${login.ok ? "OK " : "!! "}] POST   /portal/member/login                         -> ${login.status}`);
+      results.push({ nama: "member login", metode: "POST", path: "/portal/member/login", status: login.status, ok: login.ok });
+    }
+  } else {
+    console.log("  [ · ] (lewat) POST /portal/member/login — tidak ada member key.");
   }
   if (memberCookie) {
     const hc = { Cookie: memberCookie };

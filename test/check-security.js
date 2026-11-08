@@ -110,6 +110,42 @@ const http = async (urlPath, opts = {}) => {
     }
   }
 
+  console.log("\n7) Sesi 2 jam: TTL, penolakan sesi kedaluwarsa, & pembersih otomatis");
+  {
+    const session = require("../src/lib/session");
+    const db = require("../src/db");
+    const crypto = require("crypto");
+
+    // TTL wajib tepat 2 jam (7200000 ms) — tidak boleh menyimpang.
+    cek("SESSION_TTL_MS = 2 jam", session.SESSION_TTL_MS === 2 * 60 * 60 * 1000, `→ ${session.SESSION_TTL_MS}`);
+
+    // Sesi segar harus valid.
+    const segar = session.createSession({ role: "admin", ttlMs: session.ADMIN_TTL_MS });
+    cek("Sesi baru valid", !!session.getSession(segar.token), "(getSession mengembalikan null)");
+
+    // Sesi kedaluwarsa (expires_at di masa lalu) harus ditolak DAN dihapus.
+    const tokenBasi = crypto.randomBytes(8).toString("hex");
+    db.prepare("INSERT INTO sessions (token, role, expires_at) VALUES (?, ?, ?)").run(tokenBasi, "admin", Date.now() - 1000);
+    const hasilBasi = session.getSession(tokenBasi);
+    const masihAda = db.prepare("SELECT COUNT(*) c FROM sessions WHERE token = ?").get(tokenBasi).c;
+    cek("Sesi kedaluwarsa ditolak", hasilBasi === null, "(seharusnya null)");
+    cek("Sesi kedaluwarsa langsung dihapus", masihAda === 0, `→ sisa ${masihAda} baris`);
+
+    // Pembersih massal: sisipkan 2 baris kedaluwarsa lalu pastikan terbuang.
+    const ins = db.prepare("INSERT INTO sessions (token, role, expires_at) VALUES (?, ?, ?)");
+    ins.run(crypto.randomBytes(8).toString("hex"), "admin", Date.now() - 5000);
+    ins.run(crypto.randomBytes(8).toString("hex"), "member", Date.now() - 900000);
+    const dibersihkan = session.cleanupExpired();
+    cek("cleanupExpired() membuang sesi basi", dibersihkan >= 2, `→ ${dibersihkan} baris`);
+
+    // Sesi valid harus selamat dari pembersihan.
+    const masihValid = !!session.getSession(segar.token);
+    cek("Sesi valid tidak ikut terhapus", masihValid, "(seharusnya masih ada)");
+
+    // Bersihkan sisa data uji.
+    db.prepare("DELETE FROM sessions").run();
+  }
+
   console.log("\n=== HASIL ===");
   console.log(`LULUS: ${lulus} | GAGAL: ${gagal}`);
   if (srv) srv.kill();

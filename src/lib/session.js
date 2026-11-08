@@ -68,6 +68,19 @@ function cleanupExpired() {
   return stmtDeleteExpired.run(Date.now()).changes;
 }
 
+// Pembersih otomatis: tanpa ini, baris sesi kedaluwarsa menumpuk tanpa batas
+// (getSession hanya menghapus satu token saat token itu dipakai lagi, sehingga
+// sesi yang ditinggalkan pengguna tidak pernah dibersihkan). Interval 10 menit,
+// di-unref agar tidak menahan proses tetap hidup saat diuji/diimpor.
+const cleanupTimer = setInterval(() => {
+  try {
+    cleanupExpired();
+  } catch {
+    /* pembersihan gagal tidak fatal — coba lagi di siklus berikutnya */
+  }
+}, 10 * 60 * 1000);
+if (cleanupTimer.unref) cleanupTimer.unref();
+
 /** Parse cookie mentah dari header Cookie menjadi objek sederhana. */
 function parseCookies(header) {
   const out = {};
