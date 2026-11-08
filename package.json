@@ -11,6 +11,8 @@
     "test:ui": "node test/check-ui.js",
     "test:identitas": "node test/check-identitas.js",
     "test:multiplier": "node test/check-multiplier.js",
+    "test:models": "node scripts/sync-models.js",
+    "sync:models": "node scripts/sync-models.js --tulis",
     "test:endpoints": "node --env-file=.env test/check-endpoints.js",
     "test": "node test/check-security.js && node test/check-identitas.js && node test/check-ui.js && node test/check-css.js && node test/check-multiplier.js"
   },

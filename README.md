@@ -382,7 +382,9 @@ node manage-keys.js delete sk-thor-xxxx         # hapus permanen
 ## 8. Daftar Model
 
 Daftar model mengikuti sumber resmi <https://relink-gateway.biz.id/#docs> — **42 model,
-25 aktif** — dan disimpan sebagai snapshot di `src/lib/models.js`.
+26 aktif** — dan disimpan sebagai snapshot di `src/lib/models.js`.
+Snapshot ini diverifikasi otomatis terhadap `/v1/models` provider (lihat
+`npm run test:models`), sehingga penanda aktif/nonaktif tidak menyimpang diam-diam.
 
 Setiap entri memuat: `id`, `label`, `vendor`, `vision`, `multiplier`, `active`.
 
@@ -443,7 +445,7 @@ Bila provider gagal dihubungi:
 
 - `/portal/models` menyajikan **snapshot lokal** (`src/lib/models.js`) dan menandai respons
   dengan `"stale": true`.
-- `/v1/models` menyajikan 25 model aktif dari snapshot dengan `"gateway_fallback": true`.
+- `/v1/models` menyajikan 26 model aktif dari snapshot dengan `"gateway_fallback": true`.
 
 Dengan begitu dokumentasi dan integrasi klien tetap berjalan meski provider bermasalah.
 

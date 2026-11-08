@@ -1194,7 +1194,9 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   --cc-line: rgba(163, 230, 53, .20);
   --cc-line-2: rgba(255, 255, 255, .06);
   --cc-strength: 1;
-  --cc-mask: linear-gradient(180deg, #000 62%, transparent 99%);
+  /* Elemen utama (hub) berada di BAWAH, jadi mask dibuat transparan di atas
+     (menjaga keterbacaan teks hero) dan penuh mulai sekitar tengah ke bawah. */
+  --cc-mask: linear-gradient(180deg, transparent 0%, rgba(0,0,0,.5) 40%, #000 62%, #000 100%);
   -webkit-mask-image: var(--cc-mask);
   mask-image: var(--cc-mask);
   position: fixed;
@@ -1268,11 +1270,19 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   56%      { opacity: .5; }
 }
 
-/* Layar sempit: pendar dipertegas & mask dinaikkan agar tetap terasa di HP */
-@media (max-width: 640px) {
+/* Di bawah 900px, hero BELUM 2 kolom: teks + orbit + live-box menumpuk
+   vertikal dan mengisi hampir seluruh layar, sehingga hub/kilat pasti
+   bertabrakan dengan konten. Sembunyikan elemen struktural; sisakan pendar
+   atas yang halus agar tetap terasa bertema tanpa mengganggu.
+   (Breakpoint 900px disamakan dengan .hero-grid desktop.) */
+@media (max-width: 899px) {
+  .cc-bg-svg .ccbg-hub,
+  .cc-bg-svg .ccbg-runes,
+  .cc-bg-svg .ccbg-bolts,
+  .cc-bg-svg .ccbg-halo { display: none; }
   .cc-bg-svg {
-    --cc-strength: .9;
-    --cc-mask: linear-gradient(180deg, #000 46%, transparent 92%);
+    --cc-strength: .95;
+    --cc-mask: linear-gradient(180deg, #000 0%, rgba(0,0,0,.5) 42%, transparent 88%);
   }
 }
 @media (min-width: 1600px) {
