@@ -8,7 +8,10 @@
     "dev": "node --watch src/server.js",
     "mock": "node test/mock-provider.js",
     "test:security": "node test/check-security.js",
-    "test:ui": "node test/check-ui.js"
+    "test:ui": "node test/check-ui.js",
+    "test:identitas": "node test/check-identitas.js",
+    "test:endpoints": "node --env-file=.env test/check-endpoints.js",
+    "test": "node test/check-security.js && node test/check-identitas.js"
   },
   "engines": {
     "node": ">=18.0.0"

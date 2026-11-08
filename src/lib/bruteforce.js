@@ -28,6 +28,8 @@ const WINDOW_MS = 15 * 60 * 1000;   // ...dalam jendela 15 menit
 const BLOCK_MS = 15 * 60 * 1000;    // durasi blokir setelah terlampaui
 const FAIL_DELAY_MS = 400;          // jeda tiap respons gagal (memperlambat)
 
+const identitasMod = require("./identitas");
+
 // ---- Coba muat DB (persisten); jika gagal pakai memori ----
 let db = null;
 let stmtGet = null, stmtUpsert = null, stmtDel = null, stmtBersih = null;
@@ -70,10 +72,17 @@ const cleanupTimer = setInterval(() => {
 }, 60 * 1000);
 if (cleanupTimer.unref) cleanupTimer.unref();
 
-/** Kunci pembatas: gabung label (admin/member) + IP agar terpisah. */
+/**
+ * Kunci pembatas: gabung label (admin/member) + identitas pengunjung.
+ *
+ * Identitas = IP + jejak ringkas User-Agent (lihat src/lib/identitas.js).
+ * Ini WAJIB karena router memakai masquerade: semua pengunjung dari
+ * internet terlihat sebagai 10.10.0.1, sehingga tanpa jejak tambahan
+ * mereka semua berbagi satu keranjang percobaan (satu penyerang bisa
+ * mengunci admin). Contoh kunci: "admin:10.10.0.1:a1b2c3d4e5f6"
+ */
 function kunci(req, label) {
-  const ip = (req.ip || req.socket?.remoteAddress || "unknown").replace(/^::ffff:/, "");
-  return `${label}:${ip}`;
+  return `${label}:${identitasMod.identitas(req)}`;
 }
 
 /** Ambil baris status (objek dengan field first_at, count_gagal, blocked_until). */
