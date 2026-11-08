@@ -108,7 +108,8 @@ llm-gateway-express/
 │   ├── admin.html  + admin.js     # Panel admin
 │   ├── login-admin.html  login-member.html   # Fallback halaman login
 │   ├── nav.js                # Toggle menu navigasi
-│   ├── style.css             # Seluruh gaya (dark theme)
+│   ├── bg.js                 # Latar bertema ThorHub (grid + jaringan + halo + kilat)
+│   ├── style.css             # Seluruh gaya (dark theme) + gaya latar (--cc-*)
 │   ├── 404.html, logo.svg, logo-full.svg, favicon.svg
 │
 ├── deploy/                   # Berkas & panduan deployment produksi
@@ -120,7 +121,8 @@ llm-gateway-express/
 │   ├── mock-provider.js      # Provider tiruan untuk uji tanpa kredit asli
 │   ├── verify-docs.js        # Verifikasi halaman /docs (tab, blok kode, tombol salin)
 │   ├── check-css.js          # Validasi CSS (kurung, keyframes, typo properti)
-│   └── check-ui.js           # Integritas id HTML↔JS + ketersediaan kelas style
+│   ├── check-ui.js           # Integritas id HTML↔JS + ketersediaan kelas style
+│   └── check-bg.js           # Uji bg.js tanpa browser (struktur SVG latar)
 └── data/
     └── gateway.db            # Database SQLite (dibuat otomatis)
 ```
@@ -315,16 +317,53 @@ Gaya dan animasi terkumpul di `public/style.css`.
 **Menghormati preferensi pengguna:** semua animasi otomatis dinonaktifkan bila
 sistem mengaktifkan `prefers-reduced-motion`.
 
+### 6.6 Latar Belakang Bertema ThorHub
+
+Latar digambar oleh **`public/bg.js`** — satu berkas, satu sumber kebenaran.
+Setiap halaman cukup memuat `<script src="/bg.js"></script>` dan memakai
+`<body class="cc-bg">`. Skrip dijalankan **sinkron tanpa `defer`** dan menyisipkan
+`<svg class="cc-bg-svg">` sebagai anak **pertama** `<body>` supaya tidak ada
+kedipan latar (FOUC).
+
+Konsepnya "infrastruktur jaringan" — empat lapis dari belakang ke depan:
+
+| Lapis | Isi | Metafora |
+| --- | --- | --- |
+| Cahaya | Pendar lime di tepi atas & bawah | Sumber & lantai cahaya |
+| Grid | Kisi 100px, garis aksen tiap 400px | Infrastruktur / gateway |
+| Jaringan | 30 simpul ("Hub") + garis penghubung; tiap simpul ke-5 berdenyut | Katalog vendor: banyak titik, satu jaringan |
+| Halo & kilat | Busur halo berputar di cakrawala bawah + 2 kilat di margin tepi | "Hub" & identitas "Thor" |
+
+Detail teknis yang penting saat mengubahnya:
+
+- **Kanvas logis `1600×1000`** dengan `preserveAspectRatio="xMidYMid slice"`.
+  Pada layar sempit, "slice" memotong sisi kiri–kanan dan menyisakan pita tengah
+  (x ≈ 535–1065); karena itu **tidak ada elemen struktural di luar pita
+  bawah/tengah**.
+- **Kilat ada di margin tepi** (x < 250 dan x > 1350) supaya pada desktop selalu
+  di luar kolom konten. Kilat disembunyikan pada layar < 900px dan pada
+  perangkat sentuh ≤ 1366px (hemat baterai).
+- **Simpul deterministik** (PRNG berbenih tetap) — tampilan sama setiap kali
+  dimuat, tidak "gelisah" saat pindah halaman.
+- **Mask pemudar tepi** dipakai bersama grid & jaringan agar tidak berhenti
+  mendadak di pinggir layar.
+- **`dvh`** dipakai (dengan fallback `vh`) agar akurat saat address bar mobile
+  muncul/hilang.
+- Warna & intensitas semuanya lewat variabel `--cc-*` di `public/style.css`;
+  animasi: `ccbg-denyut`, `ccbg-halo-spin`, `ccbg-pendar`, `ccbg-kedip` —
+  seluruhnya dimatikan oleh `prefers-reduced-motion`.
+
 #### Memeriksa kesehatan UI
 
 | Perintah | Fungsi |
 | --- | --- |
 | `node test/check-css.js` | Validasi CSS: keseimbangan kurung, keyframes terdefinisi, karakter rusak, typo properti |
 | `node test/check-ui.js` | Pastikan setiap `id` yang diakses JS masih ada di HTML, tag `<div>` seimbang, kelas style tersedia |
+| `node test/check-bg.js` | Uji `bg.js` tanpa browser: SVG terbentuk, jumlah grid/simpul/halo/kilat benar, tidak ada `NaN`/`undefined`, setiap `id` di `<defs>` punya pemakai dan sebaliknya |
 | `node test/verify-docs.js` | Verifikasi halaman `/docs`: tab ↔ panel, blok kode terisi, tombol salin |
 
-Ketiganya keluar dengan kode `0` bila sehat — cocok dipakai sebagai pemeriksaan
-sebelum deploy.
+Semuanya keluar dengan kode `0` bila sehat — cocok dipakai sebagai pemeriksaan
+sebelum deploy. Rangkaian lengkap: `npm test`.
 
 ## 7. Menerbitkan & Mengelola Sub-API Key
 

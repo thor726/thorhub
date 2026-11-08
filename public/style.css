@@ -118,30 +118,12 @@ body {
   background-size: 100% 70dvh;
 }
 
+/* Grid global (body::before) DIHAPUS karena kini grid digambar oleh bg.js
+   bersama lapis cahaya/jaringan/kilat — satu sumber untuk seluruh ornamen
+   latar. Pendar lime di atas tetap dipertahankan di atas sebagai ambient
+   ringan sehingga halaman tak bergantung pada JavaScript. */
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, .016) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, .016) 1px, transparent 1px);
-  background-size: 40px 40px;
-  /* Di PC pendar diletakkan di atas-tengah; di layar sempit pendar memanjang
-     ke bawah (ellipse lebih tinggi) supaya grid tetap terlihat sepanjang halaman. */
-  mask-image: radial-gradient(ellipse 85% 75% at 50% 0%, #000 30%, transparent 82%);
-  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 0%, #000 30%, transparent 82%);
-}
-@media (max-width: 640px) {
-  /* Grid lebih halus di layar kecil — kepadatan 40px terasa ramai di HP */
-  body::before {
-    background-size: 32px 32px;
-    mask-image: radial-gradient(ellipse 120% 85% at 50% 0%, #000 35%, transparent 85%);
-    -webkit-mask-image: radial-gradient(ellipse 120% 85% at 50% 0%, #000 35%, transparent 85%);
-  }
-}
+
 
 img, svg, video, table, pre { max-width: 100%; }
 
@@ -1182,111 +1164,133 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 .notfound-code span { color: var(--lime); }
 
 /* ==============================================================
-   LATAR THORHUB — HUB (inti + cincin + jari-jari) & KILAT THOR
+   LATAR THORHUB — GRID + JARINGAN HUB + KILAT
    ==============================================================
-   Digambar sekali oleh bg.js (blok <svg class="cc-bg-svg">) lalu di-styling
-   di sini. Semua warna memakai variabel --cc-* agar mudah disetel.
-   Animasi sengaja pelan & hemat GPU; seluruhnya mati saat prefers-reduced-motion.
+   Struktur SVG dibuat sekali oleh bg.js (blok <svg class="cc-bg-svg">),
+   gaya & animasinya diatur di sini. Semua warna lewat variabel --cc-* agar
+   mudah disetel. Prinsipnya: latar adalah TEKSTUR AMBIENT, bukan ornamen —
+   opacity rendah, gerak pelan, dan seluruh animasi mati saat
+   prefers-reduced-motion (ditangani blok media di bagian bawah berkas).
    ============================================================== */
 .cc-bg { isolation: isolate; }
+
 .cc-bg-svg {
   --cc-lime: #a3e635;
-  --cc-line: rgba(163, 230, 53, .20);
-  --cc-line-2: rgba(255, 255, 255, .06);
+  /* Warna tiap lapis dipisah supaya bisa disetel tanpa menyentuh yang lain */
+  --cc-grid: rgba(255, 255, 255, .018);
+  --cc-grid-kuat: rgba(163, 230, 53, .045);
+  --cc-net-garis: rgba(255, 255, 255, .020);
+  --cc-net-simpul: rgba(163, 230, 53, .11);
+  --cc-halo: rgba(163, 230, 53, .09);
+  --cc-kilat: rgba(163, 230, 53, .16);
   --cc-strength: 1;
-  /* Elemen utama (hub) berada di BAWAH, jadi mask dibuat transparan di atas
-     (menjaga keterbacaan teks hero) dan penuh mulai sekitar tengah ke bawah. */
-  --cc-mask: linear-gradient(180deg, transparent 0%, rgba(0,0,0,.5) 40%, #000 62%, #000 100%);
-  -webkit-mask-image: var(--cc-mask);
-  mask-image: var(--cc-mask);
+
   position: fixed;
   display: block;
-  /* Batalkan cap global `svg { max-width: 100% }` agar SVG boleh melebihi
+  /* Batalkan cap global svg max-width 100% agar SVG boleh melebihi
      viewport (buffer gerak tidak pernah masuk ke area pandang). */
   max-width: none;
-  inset: -60px;
-  width: calc(100% + 120px);
-  height: calc(100vh + 120px);
-  height: calc(100dvh + 120px); /* akurat saat address bar mobile berubah */
+  inset: -40px;
+  width: calc(100% + 80px);
+  height: calc(100vh + 80px);
+  height: calc(100dvh + 80px); /* akurat saat address bar mobile berubah */
   z-index: -1;
   pointer-events: none;
   filter: opacity(var(--cc-strength));
 }
 
-/* --- Outline HUB --- */
-.cc-bg-svg .ccbg-ring {
-  fill: none;
-  stroke: var(--cc-line);
-  stroke-width: 1.1;
+/* --- Lapis 2: grid (garis utama tiap 400px sedikit lebih terang) --- */
+.cc-bg-svg .ccbg-garis { stroke: var(--cc-grid); stroke-width: 1; }
+.cc-bg-svg .ccbg-garis-utama { stroke: var(--cc-grid-kuat); stroke-width: 1; }
+
+/* --- Lapis 3: jaringan simpul --- */
+.cc-bg-svg .ccbg-net-garis line { stroke: var(--cc-net-garis); stroke-width: 1; }
+.cc-bg-svg .ccbg-simpul { fill: var(--cc-net-simpul); }
+/* Simpul aktif berdenyut pelan; animation-delay diatur inline per simpul
+   (lihat bg.js) sehingga denyutnya mengalir, bukan berkedip serempak. */
+.cc-bg-svg .ccbg-denyut {
+  animation: ccbg-denyut 6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
 }
-.cc-bg-svg .ccbg-dash {
-  stroke-dasharray: 3 9;
-  stroke: var(--cc-lime);
-  opacity: .35;
-}
-.cc-bg-svg .ccbg-spokes line { stroke: var(--cc-line-2); stroke-width: 1; }
-.cc-bg-svg .ccbg-nodes circle { fill: var(--cc-lime); opacity: .5; }
-.cc-bg-svg .ccbg-runes line { stroke: rgba(163, 230, 53, .16); stroke-width: 1.4; }
 
-/* Hub berputar sangat pelan (satu putaran penuh = 4 menit) */
-.cc-bg-svg .ccbg-hub { animation: ccbg-spin 240s linear infinite; }
-
-/* --- Inti bercahaya dari atas --- */
-.cc-bg-svg .ccbg-coreglow { opacity: .9; animation: ccbg-breathe 18s ease-in-out infinite; }
-
-/* --- KILAT THOR --- */
-.cc-bg-svg .ccbg-bolts .ccbg-bolt {
+/* --- Lapis 4: halo cakrawala --- */
+.cc-bg-svg .ccbg-halo-arc {
   fill: none;
-  stroke: var(--cc-lime);
-  stroke-width: 1.6;
+  stroke: var(--cc-halo);
+  stroke-width: 1;
+}
+.cc-bg-svg .ccbg-halo-1 { stroke-dasharray: 26 18; opacity: .85; }
+.cc-bg-svg .ccbg-halo-2 { stroke-dasharray: 2 14; opacity: .65; }
+.cc-bg-svg .ccbg-halo-3 { stroke-dasharray: 60 40; opacity: .45; }
+/* Satu grup, satu animasi → hemat GPU (bukan tiga animasi terpisah). */
+.cc-bg-svg .ccbg-halo { animation: ccbg-halo-spin 180s linear infinite; transform-origin: 800px 1180px; }
+
+/* --- Lapis 4b: kilat Thor (margin tepi; disembunyikan < 900px) --- */
+.cc-bg-svg .ccbg-kilat-grup { animation: ccbg-kedip 9s ease-in-out infinite; }
+.cc-bg-svg .ccbg-kilat {
+  fill: none;
+  stroke: var(--cc-kilat);
+  stroke-width: 1.5;
   stroke-linejoin: round;
   stroke-linecap: round;
-  opacity: .35;
-  filter: drop-shadow(0 0 4px rgba(163, 230, 53, .35));
+  filter: drop-shadow(0 0 5px rgba(163, 230, 53, .30));
 }
-.cc-bg-svg .ccbg-bolt-fork { stroke-width: 1.1; opacity: .22; }
-.cc-bg-svg .ccbg-bolts { animation: ccbg-flicker 7s ease-in-out infinite; }
-/* Halo: salinan kilat yang diburamkan untuk efek glow lembut */
-.cc-bg-svg .ccbg-halo .ccbg-bolt {
-  fill: none;
-  stroke: var(--cc-lime);
-  stroke-width: 4;
-  stroke-linejoin: round;
-  opacity: .10;
-  filter: blur(6px);
-}
+.cc-bg-svg .ccbg-kilat-cabang { fill: none; stroke: var(--cc-kilat); stroke-width: 1; opacity: .5; }
 
-@keyframes ccbg-spin { to { transform: rotate(360deg); } }
-@keyframes ccbg-breathe {
-  0%, 100% { opacity: .9; }
-  50%      { opacity: .55; }
+/* --- Cahaya ambient --- */
+.cc-bg-svg .ccbg-cahaya-atas { animation: ccbg-pendar 20s ease-in-out infinite; }
+.cc-bg-svg .ccbg-cahaya-bawah { animation: ccbg-pendar 26s ease-in-out infinite reverse; }
+
+@keyframes ccbg-denyut {
+  0%, 100% { opacity: .45; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(2); }
 }
-@keyframes ccbg-flicker {
+@keyframes ccbg-halo-spin { to { transform: rotate(360deg); } }
+@keyframes ccbg-pendar {
+  0%, 100% { opacity: .9; }
+  50%      { opacity: .5; }
+}
+@keyframes ccbg-kedip {
   0%, 100% { opacity: .55; }
   42%      { opacity: .45; }
-  46%      { opacity: .9; }
+  46%      { opacity: .95; }
   48%      { opacity: .5; }
-  52%      { opacity: .78; }
+  52%      { opacity: .8; }
   56%      { opacity: .5; }
 }
 
-/* Di bawah 900px, hero BELUM 2 kolom: teks + orbit + live-box menumpuk
-   vertikal dan mengisi hampir seluruh layar, sehingga hub/kilat pasti
-   bertabrakan dengan konten. Sembunyikan elemen struktural; sisakan pendar
-   atas yang halus agar tetap terasa bertema tanpa mengganggu.
-   (Breakpoint 900px disamakan dengan .hero-grid desktop.) */
+/* ---------------- Adaptasi layar ----------------
+   < 900px (HP / tablet potret): hero menumpuk vertikal dan mengisi hampir
+   seluruh layar, jadi elemen struktural (jaringan simpul + kilat) dimatikan.
+   Yang tersisa: grid halus + cahaya ambient → tetap bertema tanpa mengganggu.
+   Pada layar sempit "slice" memotong sisi kiri-kanan, menyisakan pita tengah
+   (x ≈ 535–1065 di viewBox 1600), jadi grid tetap tampil rapat & rapi. */
 @media (max-width: 899px) {
-  .cc-bg-svg .ccbg-hub,
-  .cc-bg-svg .ccbg-runes,
-  .cc-bg-svg .ccbg-bolts,
-  .cc-bg-svg .ccbg-halo { display: none; }
   .cc-bg-svg {
-    --cc-strength: .95;
-    --cc-mask: linear-gradient(180deg, #000 0%, rgba(0,0,0,.5) 42%, transparent 88%);
+    --cc-strength: .9;
+    --cc-grid: rgba(255, 255, 255, .014);
+    --cc-grid-kuat: rgba(163, 230, 53, .032);
   }
+  .cc-bg-svg .ccbg-net,
+  .cc-bg-svg .ccbg-kilat-grup { display: none; }
+  /* Halo di HP: pendar cakrawala tetap ada, tapi dibuat lebih samar. */
+  .cc-bg-svg .ccbg-halo { --cc-halo: rgba(163, 230, 53, .075); }
 }
+
+/* Tablet & laptop kecil: jaringan tetap, kilat dimatikan agar tak dekat konten */
+@media (min-width: 900px) and (max-width: 1199px) {
+  .cc-bg-svg .ccbg-kilat-grup { display: none; }
+}
+
+/* Layar sangat besar: sedikit diringankan agar tidak berat */
 @media (min-width: 1600px) {
-  .cc-bg-svg { --cc-strength: .95; }
+  .cc-bg-svg { --cc-strength: .92; }
+}
+
+/* Perangkat sentuh: matikan kilat juga di tablet besar (hemat baterai) */
+@media (hover: none) and (max-width: 1366px) {
+  .cc-bg-svg .ccbg-kilat-grup { display: none; }
 }
 
 /* Bar bergaya "uptime" tumbuh dari bawah */
@@ -1411,7 +1415,9 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cc-bg-svg, .cc-bg-svg .ccbg-hub, .cc-bg-svg .ccbg-coreglow, .cc-bg-svg .ccbg-bolts,
+  /* Semua animasi latar + orbit dimatikan (elemen tetap terlihat, hanya diam). */
+  .cc-bg-svg, .cc-bg-svg .ccbg-denyut, .cc-bg-svg .ccbg-halo, .cc-bg-svg .ccbg-kilat-grup,
+  .cc-bg-svg .ccbg-cahaya-atas, .cc-bg-svg .ccbg-cahaya-bawah,
   .orbit-ring, .o-node .t { animation: none !important; }
 }
 

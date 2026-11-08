@@ -122,7 +122,8 @@ console.log("\n=== 7. Latar ThorHub dipasang lewat bg.js (satu sumber) ===");
   // CSS tidak boleh lagi menyimpan gaya aurora lama, dan wajib punya gaya latar baru.
   const css = read("style.css");
   const adaAurora = /cc-aurora|--aurora-/.test(css);
-  const adaBgBaru = css.includes(".cc-bg-svg") && css.includes("@keyframes ccbg-spin");
+  const keyframesLatar = ["@keyframes ccbg-denyut", "@keyframes ccbg-halo-spin", "@keyframes ccbg-pendar"];
+  const adaBgBaru = css.includes(".cc-bg-svg") && keyframesLatar.every((k) => css.includes(k));
   console.log(`  ${!adaAurora ? "✓" : "✗"} CSS bebas dari gaya aurora lama`);
   console.log(`  ${adaBgBaru ? "✓" : "✗"} CSS punya gaya latar ThorHub (.cc-bg-svg + keyframes)`);
   if (adaAurora || !adaBgBaru) error++;
