@@ -35,6 +35,48 @@ router.post("/chat/completions", authenticateSubKey, async (req, res) => {
 });
 
 // ---------------------------------------------------------------
+// POST /v1/messages — jalur Anthropic-native (dipakai Claude Code & klien
+// Anthropic). Request diteruskan apa adanya ke provider, termasuk header
+// anthropic-version & anthropic-beta yang menentukan fitur.
+// ---------------------------------------------------------------
+router.post("/messages", authenticateSubKey, async (req, res) => {
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    return res.status(400).json({
+      error: { message: "Body request harus berupa JSON yang valid.", type: "invalid_request_error" },
+    });
+  }
+
+  // Teruskan header versi Anthropic bila klien mengirimnya
+  const extraHeaders = {};
+  for (const h of ["anthropic-version", "anthropic-beta"]) {
+    if (req.headers[h]) extraHeaders[h] = req.headers[h];
+  }
+
+  try {
+    await proxy.runJob({ req, res, subKey: req.subKey, payload: req.body, endpoint: "/messages", extraHeaders });
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: "Kesalahan internal gateway.", type: "internal_error" } });
+    }
+  }
+});
+
+// ---------------------------------------------------------------
+// POST /v1/messages/count_tokens — diteruskan agar klien Anthropic tetap jalan
+// ---------------------------------------------------------------
+router.post("/messages/count_tokens", authenticateSubKey, async (req, res) => {
+  try {
+    const extraHeaders = {};
+    for (const h of ["anthropic-version", "anthropic-beta"]) {
+      if (req.headers[h]) extraHeaders[h] = req.headers[h];
+    }
+    await proxy.runJob({ req, res, subKey: req.subKey, payload: req.body, endpoint: "/messages/count_tokens", extraHeaders });
+  } catch {
+    if (!res.headersSent) res.status(500).json({ error: { message: "Kesalahan internal gateway." } });
+  }
+});
+
+// ---------------------------------------------------------------
 // GET /v1/models — bonus: ambil daftar model dari provider
 // (tanpa penghitungan token, tetap lewat antrean & otentikasi)
 // ---------------------------------------------------------------

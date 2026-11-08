@@ -15,12 +15,15 @@ const stmtGetByKey = db.prepare("SELECT * FROM api_keys WHERE api_key = ?");
 function authenticateSubKey(req, res, next) {
   const header = req.headers.authorization || "";
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  const apiKey = match ? match[1].trim() : null;
+  // Dukung dua gaya header: OpenAI (Authorization: Bearer) dan
+  // Anthropic (x-api-key) — agar klien Claude/Anthropic juga bisa langsung dipakai.
+  const dariApiKey = (req.headers["x-api-key"] || "").trim();
+  const apiKey = match ? match[1].trim() : dariApiKey || null;
 
   if (!apiKey) {
     return res.status(401).json({
       error: {
-        message: "Header Authorization wajib diisi dengan format: Bearer sk-thor-xxx",
+        message: "Header Authorization wajib diisi dengan format: Bearer sk-thor-xxx (atau x-api-key)",
         type: "invalid_request_error",
         code: "missing_api_key",
       },

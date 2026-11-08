@@ -931,6 +931,117 @@ pre:hover { border-color: var(--border-2); }
 }
 
 /* ==============================================================
+   INTEGRASI API — kredensial, kartu aplikasi, pemilih OS, perintah
+   ============================================================== */
+.cred-row {
+  display: flex; align-items: center;
+  padding: var(--s-3);
+  background: var(--input-dk);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.cred-row .mono { font-size: 12.5px; }
+label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
+
+/* Kartu pilihan aplikasi */
+.apps { display: grid; grid-template-columns: 1fr; gap: var(--s-2); margin: var(--s-4) 0; }
+@media (min-width: 560px) { .apps { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 900px) { .apps { grid-template-columns: repeat(4, 1fr); } }
+.app {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-3);
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-body);
+  font-family: inherit;
+  transition: border-color var(--t) ease, background var(--t) ease;
+}
+.app:hover { border-color: var(--border-2); background: var(--card-hov); }
+.app.active { border-color: var(--lime-line); background: var(--lime-bg); }
+.app-ico {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--input-dk);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  color: var(--muted);
+}
+.app.active .app-ico { color: var(--lime); border-color: var(--lime-line); }
+.app-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.app-tx b { font-size: 14px; font-weight: 600; color: var(--text); }
+.app-tx small { font-size: 11.5px; color: var(--muted); }
+
+/* Pemilih sistem operasi */
+.os-pick {
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  margin: var(--s-4) 0;
+}
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.seg-btn {
+  padding: var(--s-2) var(--s-4);
+  min-height: 34px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: var(--mono); font-size: 12px;
+  transition: color var(--t-fast) ease, background var(--t-fast) ease;
+}
+.seg-btn.active { background: var(--lime); color: #11150b; font-weight: 600; }
+.seg-btn:not(.active):hover { color: var(--text); background: var(--card); }
+
+/* Panel aplikasi */
+.app-panel { display: none; }
+.app-panel.active { display: block; animation: fadeUp var(--t) var(--ease) both; }
+.app-panel .steps { flex-direction: column; }
+.app-panel .steps li { margin-bottom: var(--s-5); }
+.app-panel .steps li:last-child { margin-bottom: 0; }
+.app-panel .steps li > b { display: block; margin-bottom: var(--s-1); }
+.app-panel .steps small { font-size: 12.5px; }
+
+/* Blok perintah + tombol salin */
+.cmd { position: relative; margin-top: var(--s-3); }
+.cmd pre {
+  background: #0c0d0f;
+  border: 1px solid var(--border);
+  padding: var(--s-4) var(--s-4) var(--s-4);
+  padding-right: 96px;
+  max-width: 100%;
+  font-size: 12px;
+}
+.cmd > button {
+  position: absolute; top: 10px; right: 10px;
+  min-height: 30px; padding: 0 var(--s-3);
+  font-size: 11px;
+}
+
+/* Daftar istilah penting */
+.glossary {
+  display: grid; grid-template-columns: 1fr; gap: 1px;
+  margin-top: var(--s-5);
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+@media (min-width: 640px) { .glossary { grid-template-columns: repeat(3, 1fr); } }
+.gl { background: var(--card); padding: var(--s-4); }
+.gl b { display: block; font-family: var(--mono); font-size: 12px; color: var(--lime); margin-bottom: var(--s-2); }
+.gl span { font-size: 12.5px; color: var(--text-body); }
+
+/* ==============================================================
    HALAMAN 404
    ============================================================== */
 .notfound-logo { animation: scaleIn .4s var(--ease) both; }

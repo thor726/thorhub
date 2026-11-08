@@ -141,9 +141,9 @@
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
           Log Aktivitas
         </button>
-        <button class="tab" data-tab="kredensial" role="tab">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 1-7.1 7.1 5 5 0 0 1 7.1-7.1zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3"/></svg>
-          Kredensial
+        <button class="tab" data-tab="integrasi" role="tab">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
+          Integrasi API
         </button>
       </div>
 
@@ -216,40 +216,163 @@
         </div>
       </div>
 
-      <!-- TAB: Kredensial -->
-      <div class="tab-panel" id="tab-kredensial">
+      <!-- TAB: Integrasi API -->
+      <div class="tab-panel" id="tab-integrasi">
+
+        <!-- Kredensial (dipindah ke halaman ini) -->
         <div class="card">
           <h2>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 1-7.1 7.1 5 5 0 0 1 7.1-7.1zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3"/></svg>
             Kredensial
           </h2>
-          <p class="muted" style="margin-top:0;font-size:13px">Alamat server &amp; kunci akses untuk aplikasi Anda.</p>
-          <label>Base URL</label>
-          <div class="mono" id="base-url">…</div>
-          <label>API Key</label>
-          <div class="mono" style="word-break:break-all;user-select:all" id="mykey">…</div>
-          <div class="row-actions">
-            <button class="btn small" id="btn-reveal">
+          <p class="muted" style="margin-top:0;font-size:13px">Alamat server &amp; kunci akses untuk aplikasi Anda. Jaga kerahasiaannya seperti password.</p>
+          <label>Base URL
+            <button class="btn small" id="btn-copy-base" style="margin-left:auto">
+              <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Salin
+            </button>
+          </label>
+          <div class="cred-row"><span class="mono" id="base-url">…</span></div>
+          <label>API Key
+            <button class="btn small" id="btn-reveal" style="margin-left:auto">
               <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
               Tampilkan
             </button>
-            <button class="btn small" id="btn-copy-base">
-              <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Salin Base URL
-            </button>
             <button class="btn small" id="btn-copy">
               <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Salin Key
+              Salin
             </button>
+          </label>
+          <div class="cred-row"><span class="mono" style="word-break:break-all;user-select:all" id="mykey">…</span></div>
+        </div>
+
+        <!-- Hubungkan aplikasi -->
+        <div class="card">
+          <h2>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
+            Hubungkan Aplikasi Kamu
+          </h2>
+          <p class="muted" style="margin-top:0;font-size:13px">Pilih aplikasi, lalu ikuti langkahnya. Base URL &amp; API Key sudah otomatis terisi.</p>
+
+          <!-- Kartu aplikasi -->
+          <div class="apps">
+            <button class="app active" data-app="claude">
+              <span class="app-ico">CL</span>
+              <span class="app-tx"><b>Claude Code</b><small>Asisten AI koding di terminal</small></span>
+            </button>
+            <button class="app" data-app="opencode">
+              <span class="app-ico">OC</span>
+              <span class="app-tx"><b>OpenCode</b><small>Asisten koding open-source</small></span>
+            </button>
+            <button class="app" data-app="vscode">
+              <span class="app-ico">VS</span>
+              <span class="app-tx"><b>VS Code</b><small>Cline, Continue, Roo Code</small></span>
+            </button>
+            <button class="app" data-app="lain">
+              <span class="app-ico">7R</span>
+              <span class="app-tx"><b>Aplikasi lain</b><small>Cursor, ChatGPT desktop, dsb.</small></span>
+            </button>
+          </div>
+
+          <!-- Pemilih OS (khusus Claude Code) -->
+          <div class="os-pick" id="os-pick">
+            <span class="muted" style="font-family:var(--mono);font-size:12px">Sistem operasi:</span>
+            <div class="seg">
+              <button class="seg-btn active" data-os="unix">Linux / macOS</button>
+              <button class="seg-btn" data-os="win">Windows</button>
+            </div>
+          </div>
+
+          <!-- Panel: Claude Code -->
+          <div class="app-panel active" id="app-claude">
+            <ol class="steps">
+              <li>
+                <b>Salin perintah di bawah</b><br />
+                <small class="muted">Perintah ini memasang Claude Code sekaligus menghubungkannya ke akun Anda — tanpa mengedit file apa pun.</small>
+                <div class="cmd"><pre id="cmd-claude">…</pre><button class="btn small" data-copy="#cmd-claude">Salin</button></div>
+              </li>
+              <li>
+                <b>Jalankan di Terminal</b><br />
+                <small class="muted" id="claude-term-note">Buka Terminal (Ctrl+Alt+T di Linux), tempel perintahnya, lalu tekan Enter.</small>
+              </li>
+              <li>
+                <b>Selesai — coba sekarang</b><br />
+                <small class="muted">Ketik <code>claude</code> di terminal lalu ajak ngobrol, misalnya <i>"buatkan fungsi hello world di Python"</i>. Kalau ada balasan, berarti berhasil.</small>
+              </li>
+            </ol>
+          </div>
+
+          <!-- Panel: OpenCode -->
+          <div class="app-panel" id="app-opencode">
+            <ol class="steps">
+              <li>
+                <b>Install OpenCode</b>
+                <div class="cmd"><pre id="cmd-oc-install">…</pre><button class="btn small" data-copy="#cmd-oc-install">Salin</button></div>
+              </li>
+              <li>
+                <b>Buat file konfigurasi</b><br />
+                <small class="muted">Simpan sebagai <code>~/.config/opencode/opencode.json</code></small>
+                <div class="cmd"><pre id="cmd-oc-config">…</pre><button class="btn small" data-copy="#cmd-oc-config">Salin</button></div>
+              </li>
+              <li>
+                <b>Jalankan</b>
+                <small class="muted">Buka folder project, jalankan <code>opencode</code>, lalu pilih model <code>thorthub/deepseek-v4-pro</code>.</small>
+              </li>
+            </ol>
+          </div>
+
+          <!-- Panel: VS Code -->
+          <div class="app-panel" id="app-vscode">
+            <ol class="steps">
+              <li>
+                <b>Install ekstensi AI</b><br />
+                <small class="muted">Cari di marketplace: <b>Cline</b>, <b>Continue</b>, atau <b>Roo Code</b>.</small>
+              </li>
+              <li>
+                <b>Isi pengaturan provider</b><br />
+                <small class="muted">Pilih provider <b>OpenAI Compatible</b>, lalu isi:</small>
+                <div class="table-scroll">
+                  <table>
+                    <tbody>
+                      <tr><td><b>Base URL</b></td><td class="mono" id="vs-base">…</td></tr>
+                      <tr><td><b>API Key</b></td><td class="mono">(tempel API Key Anda)</td></tr>
+                      <tr><td><b>Model ID</b></td><td class="mono">deepseek-v4-pro</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </li>
+              <li><b>Mulai ngobrol</b> dari panel samping ekstensi.</li>
+            </ol>
+          </div>
+
+          <!-- Panel: aplikasi lain -->
+          <div class="app-panel" id="app-lain">
+            <ol class="steps">
+              <li><b>Base URL</b> — pakai <code id="lain-base">…</code></li>
+              <li><b>API Key</b> — pakai key Anda di atas (header <code>Authorization: Bearer …</code>)</li>
+              <li><b>Model</b> — bebas, lihat daftar di tab <b>Model</b> atau halaman Dokumentasi.</li>
+            </ol>
+            <p class="muted" style="font-size:13px;margin-bottom:0">
+              Selama aplikasi mendukung endpoint <b>OpenAI-compatible</b> (<code>/chat/completions</code>)
+              atau <b>Anthropic</b> (<code>/messages</code>), ThorHub bisa dipakai.
+            </p>
+          </div>
+
+          <!-- Istilah penting -->
+          <div class="glossary">
+            <div class="gl"><b>Base URL</b><span>Alamat server gateway tempat aplikasi mengirim permintaan.</span></div>
+            <div class="gl"><b>API Key</b><span>Kunci akses pribadi Anda. Seperti password — jangan dibagikan.</span></div>
+            <div class="gl"><b>Model</b><span>"Otak" AI yang dipakai. Bisa diganti kapan saja (mis. <code>auto</code> atau <code>deepseek-v4-pro</code>).</span></div>
           </div>
         </div>
 
+        <!-- Contoh kode -->
         <div class="card">
           <h2>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
             Contoh Pemakaian (curl)
           </h2>
-          <pre id="curl-example">…</pre>
+          <div class="cmd"><pre id="curl-example">…</pre><button class="btn small" data-copy="#curl-example">Salin</button></div>
         </div>
 
         <div class="card">
@@ -257,7 +380,16 @@
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3z"/></svg>
             Contoh Python (OpenAI SDK)
           </h2>
-          <pre id="py-example">…</pre>
+          <div class="cmd"><pre id="py-example">…</pre><button class="btn small" data-copy="#py-example">Salin</button></div>
+        </div>
+
+        <div class="card">
+          <h2>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 1-7.1 7.1 5 5 0 0 1 7.1-7.1zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3"/></svg>
+            Contoh Anthropic API (Claude)
+          </h2>
+          <p class="muted" style="margin-top:0;font-size:13px">ThorHub juga meneruskan format Anthropic di <code>/v1/messages</code>.</p>
+          <div class="cmd"><pre id="anthropic-example">…</pre><button class="btn small" data-copy="#anthropic-example">Salin</button></div>
         </div>
       </div>
     </div>

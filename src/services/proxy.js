@@ -24,6 +24,9 @@ const stmtLogUsage = db.prepare(
    VALUES (?, ?, ?, ?, ?, ?)`
 );
 
+/** Endpoint yang TIDAK dihitung tokennya (bukan generasi teks). */
+const ENDPOINT_TANPA_TOKEN = new Set(["/messages/count_tokens"]);
+
 /** Error yang membawa status + body dari provider (diteruskan apa adanya). */
 class UpstreamError extends Error {
   constructor(status, body) {
@@ -60,13 +63,42 @@ function combineSignals(...signals) {
   return combined.signal;
 }
 
-/** Ambil total token dari objek usage: utamakan total_tokens, fallback prompt+completion. */
+/**
+ * Ambil total token dari objek usage.
+ * Mendukung dua format: OpenAI (prompt_tokens/completion_tokens/total_tokens)
+ * dan Anthropic (input_tokens/output_tokens).
+ */
 function extractTotalTokens(usage) {
   if (!usage || typeof usage !== "object") return 0;
   if (Number.isFinite(usage.total_tokens)) return usage.total_tokens;
-  const prompt = Number.isFinite(usage.prompt_tokens) ? usage.prompt_tokens : 0;
-  const completion = Number.isFinite(usage.completion_tokens) ? usage.completion_tokens : 0;
+  const prompt = Number.isFinite(usage.prompt_tokens)
+    ? usage.prompt_tokens
+    : Number.isFinite(usage.input_tokens)
+      ? usage.input_tokens
+      : 0;
+  const completion = Number.isFinite(usage.completion_tokens)
+    ? usage.completion_tokens
+    : Number.isFinite(usage.output_tokens)
+      ? usage.output_tokens
+      : 0;
   return prompt + completion;
+}
+
+/** Apakah event streaming ini menandakan pemakaian sudah lengkap? */
+function endpointSelesai(parsed) {
+  const t = parsed && parsed.type;
+  if (t === "message_start") return false; // baru input_tokens, output menyusul
+  if (t === "content_block_delta" || t === "content_block_start" || t === "content_block_stop") return false;
+  if (t === "message_delta" || t === "message_stop") return true;
+  return true; // OpenAI: chunk terakhir / non-stream
+}
+
+/** Normalkan rincian token (OpenAI maupun Anthropic) ke bentuk yang seragam. */
+function extractTokenParts(usage) {
+  const u = usage || {};
+  const prompt = Number.isFinite(u.prompt_tokens) ? u.prompt_tokens : Number.isFinite(u.input_tokens) ? u.input_tokens : 0;
+  const completion = Number.isFinite(u.completion_tokens) ? u.completion_tokens : Number.isFinite(u.output_tokens) ? u.output_tokens : 0;
+  return { prompt, completion };
 }
 
 /**
@@ -106,10 +138,15 @@ function countTokens(subKey, total, info = {}) {
  * Forward satu request ke provider utama dan tulis hasilnya ke `res`.
  * Melempar error terklasifikasi (UpstreamError / QueueTimeoutError / abort).
  */
-async function doForward(state, subKey, payload, res) {
-  // Opsional: inject include_usage untuk request streaming agar token tetap terhitung
+async function doForward(state, subKey, payload, res, endpoint = "/chat/completions", extraHeaders = {}) {
+  const isAnthropic = endpoint === "/messages";
+
+  // Opsional: inject include_usage untuk request streaming agar token tetap terhitung.
+  // Khusus jalur Anthropic (/messages), stream_options tidak dikenal → dilewati,
+  // karena provider sudah mengirim usage pada event message_delta.
   if (
     config.injectStreamUsage &&
+    !isAnthropic &&
     payload.stream === true &&
     !(payload.stream_options && payload.stream_options.include_usage)
   ) {
@@ -120,12 +157,13 @@ async function doForward(state, subKey, payload, res) {
   let response;
 
   try {
-    response = await fetch(`${config.targetBaseUrl}/chat/completions`, {
+    response = await fetch(`${config.targetBaseUrl}${endpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         // Request ke provider selalu memakai MASTER_API_KEY, bukan key pembeli
         Authorization: `Bearer ${config.masterApiKey}`,
+        ...extraHeaders,
       },
       body: JSON.stringify(payload),
       signal: combineSignals(state.ac.signal, AbortSignal.timeout(config.upstreamTimeoutMs)),
@@ -174,11 +212,11 @@ async function doForward(state, subKey, payload, res) {
 
   // Mode biasa: baca JSON, hitung token, kembalikan response utuh
   const data = await response.json();
-  const u = data.usage || {};
+  const { prompt, completion } = extractTokenParts(data.usage);
   countTokens(subKey, extractTotalTokens(data.usage), {
     model: data.model || payload.model,
-    prompt: u.prompt_tokens,
-    completion: u.completion_tokens,
+    prompt,
+    completion,
   });
   res.status(response.status).json(data);
 }
@@ -199,6 +237,17 @@ async function streamToClient(response, res, subKey, reqModel) {
   let buffer = "";
   let counted = false;
 
+  // Akumulator: Anthropic memecah usage (input di message_start, output di message_delta),
+  // jadi keduanya digabung lalu dicatat SEKALI saat stream benar-benar selesai.
+  const acc = { prompt: 0, completion: 0, model: reqModel };
+  const catat = () => {
+    if (counted) return;
+    const total = acc.prompt + acc.completion;
+    if (total <= 0) return;
+    counted = true;
+    countTokens(subKey, total, { model: acc.model, prompt: acc.prompt, completion: acc.completion });
+  };
+
   upstream.on("data", (chunk) => {
     buffer += chunk.toString("utf8");
     let newlineIdx;
@@ -207,23 +256,24 @@ async function streamToClient(response, res, subKey, reqModel) {
       buffer = buffer.slice(newlineIdx + 1);
       if (!line.startsWith("data:")) continue;
       const jsonStr = line.slice(5).trim();
-      if (!jsonStr || jsonStr === "[DONE]" || counted) continue;
+      if (!jsonStr || jsonStr === "[DONE]") continue;
       try {
         const parsed = JSON.parse(jsonStr);
-        if (parsed.usage) {
-          counted = true;
-          const u = parsed.usage;
-          countTokens(subKey, extractTotalTokens(u), {
-            model: parsed.model || reqModel,
-            prompt: u.prompt_tokens,
-            completion: u.completion_tokens,
-          });
+        const u = parsed.usage || (parsed.message && parsed.message.usage);
+        if (parsed.model) acc.model = parsed.model;
+        if (u) {
+          const { prompt, completion } = extractTokenParts(u);
+          acc.prompt = Math.max(acc.prompt, prompt);
+          acc.completion = Math.max(acc.completion, completion);
         }
+        if (endpointSelesai(parsed)) catat();
       } catch {
         /* baris belum utuh / bukan JSON — abaikan */
       }
     }
   });
+
+  upstream.on("end", catat); // jaring pengaman bila penanda akhir tidak terbaca
 
   try {
     await pipeline(upstream, res);
@@ -237,7 +287,7 @@ async function streamToClient(response, res, subKey, reqModel) {
  * Menjadwalkan satu request melalui limiter lalu meneruskannya ke provider.
  * Menangani: timeout antrean, pembatalan oleh client, dan error berformat OpenAI.
  */
-async function runJob({ req, res, subKey, payload }) {
+async function runJob({ req, res, subKey, payload, endpoint, extraHeaders }) {
   const state = { cancelled: false, reason: null, ac: new AbortController() };
 
   // ---- Timer timeout antrean ----
@@ -275,7 +325,7 @@ async function runJob({ req, res, subKey, payload }) {
         ? new QueueTimeoutError()
         : Object.assign(new Error("dibatalkan"), { isAbort: true });
     }
-    await doForward(state, subKey, payload, res);
+    await doForward(state, subKey, payload, res, endpoint || "/chat/completions", extraHeaders || {});
   };
 
   try {

@@ -101,21 +101,67 @@ async function boot() {
   fill.style.width = Math.min(100, pct) + "%";
   fill.className = "quota-fill" + (pct >= 80 ? " danger" : pct >= 50 ? " warn" : "");
 
-  // --- Kredensial ---
+  // --- Kredensial & panduan integrasi ---
+  isiIntegrasi(d);
+
+  await loadUsage();
+}
+
+/** Isi seluruh panel Integrasi API dengan Base URL & API Key milik member. */
+function isiIntegrasi(d) {
   const base = location.origin;
+  const key = d.api_key;
+
   $("base-url").textContent = base + "/v1";
   $("mykey").textContent = "•".repeat(40);
-  $("mykey").dataset.full = d.api_key;
+  $("mykey").dataset.full = key;
+  $("vs-base").textContent = base + "/v1";
+  $("lain-base").textContent = base + "/v1";
+
+  // 1) Claude Code — perintah satu baris (Linux/macOS)
+  const elClaude = $("cmd-claude");
+  elClaude.dataset.unix =
+`BASE_URL="${base}/v1" API_KEY="${key}" bash <(curl -fsSL ${base}/integrasi/claude)`;
+  // Perintah versi Windows (PowerShell)
+  elClaude.dataset.win =
+`$env:BASE_URL="${base}/v1"; $env:API_KEY="${key}"; irm ${base}/integrasi/claude.ps1 | iex`;
+  terapkanOS();
+
+  // 2) OpenCode
+  $("cmd-oc-install").textContent = `npm install -g opencode-ai`;
+  $("cmd-oc-config").textContent = JSON.stringify(
+    {
+      $schema: "https://opencode.ai/config.json",
+      provider: {
+        thorthub: {
+          npm: "@ai-sdk/openai-compatible",
+          name: "ThorHub",
+          options: { baseURL: base + "/v1", apiKey: key },
+          models: {
+            "deepseek-v4-pro": { name: "DeepSeek V4 Pro" },
+            "deepseek-v4-flash": { name: "DeepSeek V4 Flash" },
+            auto: { name: "Auto (pilih otomatis)" },
+          },
+        },
+      },
+    },
+    null,
+    2
+  );
+
+  // 3) curl — OpenAI style
   $("curl-example").textContent =
 `curl ${base}/v1/chat/completions \\
-  -H "Authorization: Bearer ${d.api_key}" \\
+  -H "Authorization: Bearer ${key}" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"${"deepseek-v4-pro"}","messages":[{"role":"user","content":"Halo"}]}'`;
+  -d '{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"Halo"}]}'`;
+
+  // 4) Python — OpenAI SDK
   $("py-example").textContent =
 `from openai import OpenAI
 
 client = OpenAI(
-    api_key="${d.api_key}",
+    api_key="${key}",
     base_url="${base}/v1",
 )
 
@@ -125,7 +171,13 @@ resp = client.chat.completions.create(
 )
 print(resp.choices[0].message.content)`;
 
-  await loadUsage();
+  // 5) Anthropic — /v1/messages
+  $("anthropic-example").textContent =
+`curl ${base}/v1/messages \\
+  -H "x-api-key: ${key}" \\
+  -H "anthropic-version: 2023-06-01" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"deepseek-v4-pro","max_tokens":256,"messages":[{"role":"user","content":"Halo"}]}'`;
 }
 
 /** Ambil rincian pemakaian (per model, harian, log). */
@@ -246,6 +298,64 @@ function renderLog(rows) {
     })
     .join("");
 }
+
+// ---------------- Panel Integrasi API ----------------
+
+/** Tampilkan perintah sesuai OS terpilih (kedua varian selalu ada di dataset). */
+function terapkanOS() {
+  const os = document.querySelector(".seg-btn.active")?.dataset.os || "unix";
+  const el = $("cmd-claude");
+  if (!el) return;
+  el.textContent = os === "win" ? el.dataset.win || "" : el.dataset.unix || "";
+  el.dataset.cur = os === "win" ? "win" : "unix";
+  const note = $("claude-term-note");
+  if (note) {
+    note.textContent =
+      os === "win"
+        ? 'Buka PowerShell (cari "PowerShell" di menu Start), tempel perintahnya, lalu tekan Enter.'
+        : "Buka Terminal (Ctrl+Alt+T di Linux), tempel perintahnya, lalu tekan Enter.";
+  }
+}
+
+// Pemilih aplikasi
+document.querySelectorAll(".app").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".app").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".app-panel").forEach((p) => p.classList.remove("active"));
+    btn.classList.add("active");
+    const panel = $("app-" + btn.dataset.app);
+    if (panel) panel.classList.add("active");
+    // Pemilih OS hanya relevan untuk Claude Code
+    const osPick = $("os-pick");
+    if (osPick) osPick.classList.toggle("hidden", btn.dataset.app !== "claude");
+  });
+});
+
+// Pemilih sistem operasi
+document.querySelectorAll(".seg-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".seg-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    terapkanOS();
+  });
+});
+
+// Tombol "Salin" generik: data-copy="#id" menyalin isi elemen target
+document.querySelectorAll("[data-copy]").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const target = document.querySelector(btn.dataset.copy);
+    if (!target) return;
+    const teks = target.dataset.cur === "win" ? target.dataset.win : target.textContent;
+    try {
+      await navigator.clipboard.writeText(teks);
+      const asli = btn.textContent;
+      btn.textContent = "✓ Tersalin";
+      setTimeout(() => (btn.textContent = asli), 1200);
+    } catch {
+      btn.textContent = "Gagal";
+    }
+  });
+});
 
 // ---------------- Interaksi ----------------
 document.querySelectorAll(".tab").forEach((btn) => {

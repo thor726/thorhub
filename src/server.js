@@ -39,6 +39,18 @@ app.get("/docs", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "docs.html"));
 });
 
+// Skrip instalasi integrasi (dipanggil via: bash <(curl -fsSL .../integrasi/claude))
+// Content-Type text/plain agar aman dijalankan lewat process substitution.
+app.get("/integrasi/:skrip", (req, res) => {
+  const nama = String(req.params.skrip).replace(/[^a-z0-9_-]/gi, "");
+  const berkas = path.join(PUBLIC_DIR, "integrasi", `${nama}.sh`);
+  const fs = require("fs");
+  if (!fs.existsSync(berkas)) {
+    return res.status(404).type("text/plain").send("# Skrip integrasi tidak ditemukan.\n");
+  }
+  res.type("text/plain; charset=utf-8").sendFile(berkas);
+});
+
 // Log ringkas setiap request
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
