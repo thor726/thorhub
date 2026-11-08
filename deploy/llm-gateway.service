@@ -1,0 +1,28 @@
+[Unit]
+Description=LLM Proxy Gateway (Express.js + SQLite + Bottleneck)
+Documentation=file:///root/home/projects/llm-gateway-express/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/home/projects/llm-gateway-express
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=3
+
+# Log terpusat ke journald
+# Lihat dengan: journalctl -u llm-gateway -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llm-gateway
+
+# Batas & pengamanan dasar
+LimitNOFILE=65535
+
+# Kirim SIGTERM lalu tunggu 10 detik sebelum SIGKILL
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
