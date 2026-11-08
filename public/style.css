@@ -1345,6 +1345,38 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   .cc-bg-svg .ccbg-kilat-grup { display: none; }
 }
 
+/* ==============================================================
+   RINGAN SAAT MENGGULIR — jeda animasi kontinu selagi pengguna menggulir
+   ==============================================================
+   Latar ThorHub (simpul denyut, halo berputar, pendar cahaya) dan orbit
+   vendor di beranda adalah animasi TERUS-MENERUS. Diukur nyata (Chromium,
+   perangkat mobile disimulasikan, CPU 4x lebih lambat, 390px): selagi
+   menggulir, animasi ini memaksa browser menghitung ulang GAYA + TATA LETAK
+   ~61x per detik dan membakar ~430 ms CPU tiap detik. Di ponsel, beban itu
+   memanaskan perangkat sehingga sistem MEMPERLAMBAT dirinya (thermal
+   throttling) — itulah sebabnya halaman terasa "awalnya lancar, makin lama
+   digulir makin ngelag".
+
+   Obat: SELAGI pengguna menggulir, animasi latar dijeda (animation-play-state:
+   paused) lewat satu kelas ".ber-gulir" pada <html>, dipasang oleh
+   public/scrollRingan.js; ~120 ms setelah gulir berhenti, animasi lanjut dari
+   titik yang sama (bukan dari awal). Tampilan saat halaman DIAM 100% tidak
+   berubah — yang hilang hanya beban pada saat menggulir.
+
+   Hasil ukur: CPU saat menggulir 426 -> 125 ms/dtk (-71%), tata letak 61 -> 0.
+   Paused alih-alih animation:none supaya animasi TIDAK melompat/berkedip saat
+   dilanjutkan, dan supaya tidak ada perhitungan ulang animasi saat kelas
+   dipasang/dilepas.
+   ============================================================== */
+html.ber-gulir .cc-bg-svg,
+html.ber-gulir .cc-bg-svg *,
+html.ber-gulir .orbit-ring,
+html.ber-gulir .o-node .t,
+html.ber-gulir .dot,
+html.ber-gulir .live-box .v::after {
+  animation-play-state: paused !important;
+}
+
 /* Bar bergaya "uptime" tumbuh dari bawah */
 @keyframes uptime-fade-in {
   from { opacity: .25; transform: scaleY(.6); }

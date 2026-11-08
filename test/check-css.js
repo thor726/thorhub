@@ -21,11 +21,19 @@ if (open !== close) { console.log("  ✗ TIDAK SEIMBANG"); error++; }
 else console.log("  ✓ seimbang");
 
 // 2. Setiap `animation:` yang memakai nama harus punya @keyframes-nya
-const keyframes = new Set([...css.matchAll(/@keyframes\s+([A-Za-z0-9_-]+)/g)].map((m) => m[1]));
+//
+// CATATAN: pemindaian dilakukan pada SALINAN TANPA KOMENTAR. Sebelumnya
+// komentar ikut dipindai sehingga kalimat penjelasan seperti
+// "…alih-alih animation:none…" salah dianggap deklarasi animasi, lalu pola
+// [^;]+ menelan teks jauh sampai titik-koma berikutnya dan menghasilkan nama
+// animasi palsu ("dan", "html.ber-gulir"). Bukan bug CSS, melainkan bug alat uji.
+const cssTanpaKomentar = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+const keyframes = new Set([...cssTanpaKomentar.matchAll(/@keyframes\s+([A-Za-z0-9_-]+)/g)].map((m) => m[1]));
 console.log("\nkeyframes terdefinisi (" + keyframes.size + "):", [...keyframes].join(", "));
 
 const animNames = new Set();
-for (const m of css.matchAll(/animation:\s*([^;]+);/g)) {
+for (const m of cssTanpaKomentar.matchAll(/animation:\s*([^;]+);/g)) {
   // Ambil token pertama (nama animasi) bila bukan angka/durasi
   const parts = m[1].split(",");
   for (const p of parts) {
@@ -59,7 +67,7 @@ const typo = [
 ];
 console.log("");
 for (const t of typo) {
-  if (t.re.test(css)) { console.log("  ✗ " + t.msg); error++; }
+  if (t.re.test(cssTanpaKomentar)) { console.log("  ✗ " + t.msg); error++; }
   else console.log("  ✓ " + t.msg.slice(0, 40) + "…: aman");
 }
 
