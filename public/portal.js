@@ -22,8 +22,27 @@ function kek(n) {
 }
 
 let DATA_ME = null;
+// Timer auto-logout saat sesi 2 jam habis.
+let sessionTimer = null;
+
+/** Jadwalkan auto-logout tepat pada waktu kedaluwarsa sesi (2 jam). */
+function jadwalkanAutoLogout(expiresAt) {
+  if (sessionTimer) clearTimeout(sessionTimer);
+  const exp = Number(expiresAt) || 0;
+  if (!exp) return;
+  const sisa = exp - Date.now();
+  if (sisa <= 0) {
+    showLogin();
+    return;
+  }
+  sessionTimer = setTimeout(() => {
+    showLogin();
+    $("login-msg").innerHTML = '<div class="alert warn">Sesi Anda berakhir setelah 2 jam. Silakan login kembali.</div>';
+  }, sisa);
+}
 
 function showLogin() {
+  if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; }
   $("loading").classList.add("hidden");
   $("panel").classList.add("hidden");
   $("login-section").classList.remove("hidden");
@@ -50,6 +69,9 @@ async function boot() {
   $("panel").classList.remove("hidden");
   $("btn-logout").classList.remove("hidden");
   $("btn-refresh").classList.remove("hidden");
+
+  // Jadwalkan auto-logout saat sesi 2 jam habis (expires_at dari server).
+  jadwalkanAutoLogout(d.expires_at);
 
   // --- Identitas ---
   $("uname").textContent = d.user_name;

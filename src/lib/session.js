@@ -5,6 +5,15 @@
  * Cookie yang dikirim ke browser: HttpOnly, SameSite=Lax, Path=/.
  * Verifikasi waktu-konstan tidak diperlukan di sini karena pencarian
  * dilakukan lewat PRIMARY KEY (nilai token acak, bukan rahasia yang bocor).
+ *
+ * KEBIJAKAN KEDALUWARSA (BERLAKU SAMA UNTUK ADMIN & MEMBER):
+ *   Masa berlaku sesi = tepat 2 jam (7200000 ms).
+ *   Setelah lewat 2 jam, getSession() otomatis menghapus baris sesi dari
+ *   database dan mengembalikan null, sehingga middleware otentikasi
+ *   (requireAdminSession / requireMemberSession) membalas HTTP 401 dan
+ *   frontend mengarahkan pengguna kembali ke halaman Login.
+ *   Cookie juga dibatasi lewat Max-Age = 7200000 detik-ms yang sama,
+ *   sehingga browser berhenti mengirim cookie basi.
  */
 const crypto = require("crypto");
 const db = require("../db");
@@ -13,9 +22,11 @@ const db = require("../db");
 const ADMIN_COOKIE = "gw_admin";
 const MEMBER_COOKIE = "gw_member";
 
-// Masa berlaku (ms)
-const ADMIN_TTL_MS = 12 * 60 * 60 * 1000;   // 12 jam
-const MEMBER_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 hari
+// Masa berlaku sesi: tepat 2 jam (7200000 ms).
+// Dipakai seragam oleh admin maupun member — tidak ada pengecualian role.
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 7200000 ms = 2 jam
+const ADMIN_TTL_MS = SESSION_TTL_MS;
+const MEMBER_TTL_MS = SESSION_TTL_MS;
 
 // ---- Prepared statements ----
 const stmtInsert = db.prepare(
@@ -28,9 +39,10 @@ const stmtDeleteExpired = db.prepare("DELETE FROM sessions WHERE expires_at < ?"
 /** Buat token sesi baru dan simpan ke database. */
 function createSession({ role, userName = null, apiKey = null, ttlMs }) {
   const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = Date.now() + ttlMs;
+  const ttl = Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : SESSION_TTL_MS;
+  const expiresAt = Date.now() + ttl;
   stmtInsert.run(token, role, userName, apiKey, expiresAt);
-  return { token, expiresAt };
+  return { token, expiresAt, ttlMs: ttl };
 }
 
 /** Ambil sesi valid (belum kedaluwarsa). Kembalikan null bila tidak ada/expired. */
@@ -39,6 +51,7 @@ function getSession(token) {
   const row = stmtGet.get(token);
   if (!row) return null;
   if (row.expires_at < Date.now()) {
+    // Sesi sudah lewat 2 jam → hapus otomatis dari database.
     stmtDelete.run(token);
     return null;
   }
@@ -99,6 +112,7 @@ function isSecureRequest(req) {
 module.exports = {
   ADMIN_COOKIE,
   MEMBER_COOKIE,
+  SESSION_TTL_MS,
   ADMIN_TTL_MS,
   MEMBER_TTL_MS,
   createSession,

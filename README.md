@@ -271,7 +271,7 @@ Login memakai `ADMIN_PASSWORD`. Setelah masuk, tersedia:
 - **Terbitkan Key**: isi nama member + limit token → key tampil **penuh sekali saja**
 - **Tabel semua key**: pemakaian, bar kuota, dengan aksi **Top-up**, **Blokir/Aktifkan**, **Hapus**
 
-Sesi admin berlaku **12 jam**, sesi member **7 hari** (lihat [Keamanan](#14-keamanan)).
+Sesi login (admin **maupun** member) berlaku tepat **2 jam**. Setelah lewat 2 jam, sesi otomatis dihapus dan pengguna diarahkan kembali ke halaman Login (lihat [Keamanan](#14-keamanan)).
 
 ---
 
@@ -665,7 +665,7 @@ Endpoint ini dipakai oleh halaman `/admin` dan `/portal` di belakang layar. **Be
 
 | Metode | Endpoint | Body | Keterangan |
 | --- | --- | --- | --- |
-| POST | `/portal/admin/login` | `{ "password": "..." }` | Login → set cookie admin (12 jam) |
+| POST | `/portal/admin/login` | `{ "password": "..." }` | Login → set cookie admin (2 jam) |
 | POST | `/portal/admin/logout` | — | Hapus sesi & cookie |
 | GET | `/portal/admin/me` | — | Cek sesi aktif |
 | GET | `/portal/admin/keys` | — | Daftar semua key |
@@ -678,7 +678,7 @@ Endpoint ini dipakai oleh halaman `/admin` dan `/portal` di belakang layar. **Be
 
 | Metode | Endpoint | Body | Keterangan |
 | --- | --- | --- | --- |
-| POST | `/portal/member/login` | `{ "api_key": "sk-thor-..." }` | Login → set cookie member (7 hari) |
+| POST | `/portal/member/login` | `{ "api_key": "sk-thor-..." }` | Login → set cookie member (2 jam) |
 | POST | `/portal/member/logout` | — | Hapus sesi & cookie |
 | GET | `/portal/member/me` | — | Data member + kuota (auth via cookie) |
 
@@ -757,14 +757,50 @@ Lihat tabelnya di halaman `/docs` pada kolom **Multiplier**.
 | Cookie sesi | `HttpOnly`, `SameSite=Lax`, `Secure` (otomatis saat HTTPS), isi = token acak 32 byte |
 | Data di cookie | **Hanya token sesi** — API key member & password admin tidak pernah disimpan di cookie |
 | Password admin | Dibandingkan **timing-safe** (hash SHA-256 + `timingSafeEqual`) |
-| TTL sesi | Admin **12 jam**, member **7 hari** (bisa dicabut kapan saja di Redis/SQLite) |
+| TTL sesi | Admin **dan** member: tepat **2 jam** (auto-hapus + redirect ke Login; bisa dicabut kapan saja) |
 | Isolasi member | Member hanya bisa melihat data miliknya sendiri (`/portal/member/me`) |
 | Revoke | Logout menghapus sesi di database, bukan hanya cookie |
+| **Anti brute-force (persisten)** | Login admin & member dibatasi: maks **8 percobaan gagal / 15 menit per IP** → blokir HTTP 429 selama 15 menit. Status disimpan di tabel SQLite `login_attempts` sehingga **tetap berlaku setelah restart/deploy** (bukan sekadar in-memory). Tiap percobaan gagal diberi jeda 400 ms. Kelola: `src/lib/bruteforce.js` |
+| **Vault rahasia** | Kredensial sensitif disimpan terenkripsi (GPG AES256) di `~/.secrets/thorthub-vault.gpg` via `rahasia.sh` — agar tidak bocor lewat backup `.tgz`, commit, atau snapshot disk |
+| **Rate-limit nginx** | `/portal/admin/login` & `/portal/member/login`: **5 req/menit** per IP (burst 3). `/v1/*`: 30 req/detik |
+| **Header keamanan** | `X-Frame-Options: DENY`, `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (HSTS 2 tahun) |
+| **Isolasi jaringan** | Aplikasi default bind ke `127.0.0.1:3000` — hanya nginx (loopback) yang bisa menjangkau; port 3000 tidak terekspos ke LAN/internet |
+| **Anti spoof XFF** | nginx menimpa `X-Forwarded-For` dengan IP klien nyata (`$remote_addr`); `trust proxy` = `"loopback"` di aplikasi |
+| **Rotasi password** | `ADMIN_PASSWORD` sebaiknya acak ≥ 20 karakter. Ganti bila pernah dipakai/ditebak |
 
 **Jangan pernah:**
 1. Meng-commit `.env` ke Git (sudah di `.gitignore`).
 2. Mengekspos `MASTER_API_KEY` atau `ADMIN_PASSWORD` ke pembeli.
 3. Menjalankan tanpa HTTPS di produksi (cookie `Secure` butuh HTTPS).
+4. Memakai `ADMIN_PASSWORD` yang pendek/mudah ditebak (mis. `kata+angka`). Minimal 20 karakter acak.
+
+### 14.1 Vault Rahasia (`rahasia.sh`)
+
+Untuk mencegah kredensial bocor lewat backup/commit, simpan salinan terenkripsi:
+
+```bash
+# Simpan/ganti satu rahasia (frasa sandi vault diminta sekali)
+./rahasia.sh simpan ADMIN_PASSWORD
+
+# Muat seluruh isi .env ke vault (terenkripsi GPG AES256)
+./rahasia.sh import-env .env
+
+# Lihat daftar nama kunci (TANPA nilai)
+./rahasia.sh daftar
+
+# Ambil satu nilai (mis. untuk dipakai skrip)
+./rahasia.sh ambil ADMIN_PASSWORD
+
+# Tulis ulang vault → file .env (mode 600) saat perlu restore
+./rahasia.sh export-env .env.restored
+
+# Cek vault bisa dibuka
+./rahasia.sh uji
+```
+
+- Vault: `~/.secrets/thorthub-vault.gpg` (mode 600, **di luar repo**, tidak masuk Git).
+- Frasa sandi vault: `VAULT_PASS` atau `~/.secrets/vault-passphrase.txt` (mode 600) atau prompt.
+- **Backup yang aman:** ikutkan `~/.secrets/` (file terenkripsi). Jangan pernah backup `.env` plaintext ke lokasi tak terpercaya.
 
 ---
 

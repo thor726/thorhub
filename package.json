@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "mock": "node test/mock-provider.js"
+    "mock": "node test/mock-provider.js",
+    "test:security": "node test/check-security.js",
+    "test:ui": "node test/check-ui.js"
   },
   "engines": {
     "node": ">=18.0.0"

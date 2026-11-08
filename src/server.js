@@ -17,8 +17,38 @@ app.disable("x-powered-by");
 // Body JSON (limit 4 MB untuk prompt panjang)
 app.use(express.json({ limit: "4mb" }));
 
-// Percayai proxy (nginx) agar req.secure & X-Forwarded-Proto terbaca benar
-app.set("trust proxy", true);
+// Percayai HANYA proxy lokal (nginx di loopback) agar req.secure &
+// X-Forwarded-Proto terbaca benar. Nilai "loopback" (bukan true) penting untuk
+// keamanan: dengan true, Express mempercayai SEMUA hop sehingga X-Forwarded-For
+// yang dipalsukan penyerang bisa dipakai untuk mengelabui pembatas per-IP
+// (brute-force guard). Dengan loopback, req.ip = IP klien nyata.
+app.set("trust proxy", "loopback");
+
+// Header keamanan dasar (hardening). Mencegah clickjacking, MIME-sniffing,
+// kebocoran referrer, dan membatasi sumber script/iframe.
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");            // tolak <iframe> ke panel admin (anti clickjacking)
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-DNS-Prefetch-Control", "off");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  // CSP: izinkan script/style milik sendiri + inline style (dipakai halaman),
+  // blokir objek/frame pihak ketiga. Halaman memakai <script src> lokal & <script> inline.
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data:; " +
+      "connect-src 'self'; " +
+      "font-src 'self'; " +
+      "object-src 'none'; " +
+      "frame-ancestors 'none'; " +
+      "base-uri 'self'; " +
+      "form-action 'self'"
+  );
+  next();
+});
 
 // File statis panel web (HTML/CSS/JS) dari folder public/
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -129,9 +159,15 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: { message: "Kesalahan internal gateway.", type: "internal_error" } });
 });
 
-app.listen(config.port, () => {
+// Bind ke loopback secara default: hanya nginx (di mesin yang sama) yang bisa
+// menjangkau aplikasi. Ini mencegah penyerang menembus port 3000 langsung dari
+// jaringan/LAN dan melewati rate-limit nginx + HSTS. Set HOST=0.0.0.0 di .env
+// bila memang ingin mengekspos aplikasi tanpa reverse proxy (tidak disarankan).
+const HOST = process.env.HOST || "127.0.0.1";
+app.listen(config.port, HOST, () => {
   console.log("==============================================");
   console.log("  LLM Proxy Gateway siap menerima request");
+  console.log(`  Bind host       : ${HOST}`);
   console.log(`  Port lokal      : ${config.port}`);
   console.log(`  Provider target : ${config.targetBaseUrl}`);
   console.log(`  Rate limit      : TANPA BATAS (unlimited, tanpa antrean)`);

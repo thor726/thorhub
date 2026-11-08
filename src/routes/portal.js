@@ -18,6 +18,7 @@ const config = require("../config");
 const db = require("../db");
 const session = require("../lib/session");
 const models = require("../lib/models");
+const bruteforce = require("../lib/bruteforce");
 const DEFAULT_MODEL = models.DEFAULT_MODEL;
 
 // Cache sederhana daftar model (hindari spam ke provider tiap request)
@@ -112,7 +113,7 @@ function buildPayload(list, showAll, vendorFilter, extra) {
 // ---------------------------------------------------------------
 // ADMIN — login / logout / me
 // ---------------------------------------------------------------
-router.post("/admin/login", (req, res) => {
+router.post("/admin/login", bruteforce.guard("admin"), async (req, res) => {
   if (!config.adminPassword) {
     return res.status(503).json({
       error: { message: "ADMIN_PASSWORD belum diatur di server.", code: "admin_not_configured" },
@@ -123,8 +124,17 @@ router.post("/admin/login", (req, res) => {
     return res.status(400).json({ error: { message: 'Field "password" wajib diisi.', code: "invalid_request" } });
   }
   if (!safeEqual(password, config.adminPassword)) {
+    // Catat percobaan gagal; beri jeda kecil untuk memperlambat serangan otomatis.
+    const diblokir = bruteforce.catatGagal(req, "admin");
+    console.warn(`[SECURITY] Login admin GAGAL dari IP ${(req.ip || "").replace(/^::ffff:/, "")}${diblokir ? " → IP DIBLOKIR sementara" : ""}`);
+    await new Promise((r) => setTimeout(r, bruteforce.FAIL_DELAY_MS));
+    if (diblokir) {
+      return res.status(429).json({ error: { message: "Terlalu banyak percobaan gagal. Coba lagi nanti.", code: "too_many_attempts" } });
+    }
     return res.status(401).json({ error: { message: "Password admin salah.", code: "unauthorized" } });
   }
+  // Login sukses → bersihkan penghitung brute-force untuk IP ini.
+  bruteforce.catatSukses(req, "admin");
   const { token } = session.createSession({ role: "admin", ttlMs: session.ADMIN_TTL_MS });
   res.setHeader("Set-Cookie", session.buildSetCookie(session.ADMIN_COOKIE, token, session.ADMIN_TTL_MS, session.isSecureRequest(req)));
   res.json({ data: { message: "Login admin berhasil.", role: "admin" } });
@@ -137,8 +147,10 @@ router.post("/admin/logout", (req, res) => {
   res.json({ data: { message: "Logout berhasil." } });
 });
 
-router.get("/admin/me", requireAdminSession, (_req, res) => {
-  res.json({ data: { role: "admin" } });
+router.get("/admin/me", requireAdminSession, (req, res) => {
+  // expires_at (epoch ms) dikirim ke frontend agar UI bisa menjadwalkan
+  // auto-logout tepat saat sesi 2 jam habis.
+  res.json({ data: { role: "admin", expires_at: req.session.expires_at, ttl_ms: session.SESSION_TTL_MS } });
 });
 
 // ---- Kelola key via sesi panel (tanpa mengekspos ADMIN_API_KEY ke browser) ----
@@ -316,15 +328,23 @@ router.get("/admin/models", requireAdminSession, (_req, res) => {
 // ---------------------------------------------------------------
 // MEMBER — login / logout / me
 // ---------------------------------------------------------------
-router.post("/member/login", (req, res) => {
+router.post("/member/login", bruteforce.guard("member"), async (req, res) => {
   const apiKey = (req.body && req.body.api_key) || "";
   if (!apiKey || typeof apiKey !== "string") {
     return res.status(400).json({ error: { message: 'Field "api_key" wajib diisi.', code: "invalid_request" } });
   }
   const row = db.prepare("SELECT * FROM api_keys WHERE api_key = ?").get(apiKey.trim());
   if (!row) {
+    // Batasi juga tebak-tebakan API key (mencegah enumerasi key sk-thor-…).
+    const diblokir = bruteforce.catatGagal(req, "member");
+    console.warn(`[SECURITY] Login member GAGAL (key tak dikenal) dari IP ${(req.ip || "").replace(/^::ffff:/, "")}${diblokir ? " → IP DIBLOKIR sementara" : ""}`);
+    await new Promise((r) => setTimeout(r, bruteforce.FAIL_DELAY_MS));
+    if (diblokir) {
+      return res.status(429).json({ error: { message: "Terlalu banyak percobaan gagal. Coba lagi nanti.", code: "too_many_attempts" } });
+    }
     return res.status(401).json({ error: { message: "API Key tidak ditemukan.", code: "invalid_api_key" } });
   }
+  bruteforce.catatSukses(req, "member");
   // Key nonaktif / kuota habis tetap boleh login agar member bisa melihat statusnya.
   const { token } = session.createSession({
     role: "member",
@@ -363,6 +383,8 @@ router.get("/member/me", requireMemberSession, (req, res) => {
   res.json({
     data: {
       role: "member",
+      expires_at: req.session.expires_at,
+      ttl_ms: session.SESSION_TTL_MS,
       id: row.id,
       user_name: row.user_name,
       api_key: row.api_key,

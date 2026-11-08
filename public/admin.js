@@ -8,6 +8,29 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const num = (n) => Number(n || 0).toLocaleString("id-ID");
 
 let loggedIn = false;
+// Batas waktu sesi (epoch ms) dari server; dipakai untuk auto-logout tepat
+// saat sesi 2 jam habis.
+let SESSION_EXPIRES_AT = 0;
+let sessionTimer = null;
+
+/**
+ * Jadwalkan auto-logout tepat pada waktu kedaluwarsa sesi (2 jam).
+ * Saat tercapai: tampilkan form login tanpa redirect (anti-loop).
+ */
+function jadwalkanAutoLogout(expiresAt) {
+  SESSION_EXPIRES_AT = Number(expiresAt) || 0;
+  if (sessionTimer) clearTimeout(sessionTimer);
+  if (!SESSION_EXPIRES_AT) return;
+  const sisa = SESSION_EXPIRES_AT - Date.now();
+  if (sisa <= 0) {
+    showLogin();
+    return;
+  }
+  sessionTimer = setTimeout(() => {
+    showLogin();
+    $("login-msg").innerHTML = '<div class="alert warn">Sesi Anda berakhir setelah 2 jam. Silakan login kembali.</div>';
+  }, sisa);
+}
 
 /** Panggil API. Bila 401 → tampilkan form login (TANPA redirect). */
 async function api(path, opts = {}) {
@@ -27,6 +50,7 @@ async function api(path, opts = {}) {
 
 function showLogin() {
   loggedIn = false;
+  if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; }
   $("loading").classList.add("hidden");
   $("panel").classList.add("hidden");
   $("login-section").classList.remove("hidden");
@@ -51,7 +75,9 @@ async function boot() {
   try {
     const r = await fetch(API + "/me", { credentials: "same-origin" });
     if (r.ok) {
+      const d = (await r.json()).data || {};
       showPanel();
+      jadwalkanAutoLogout(d.expires_at);
       await loadAll();
     } else {
       showLogin();
@@ -277,7 +303,8 @@ $("form-login").addEventListener("submit", async (e) => {
     } else {
       $("password").value = "";
       showPanel();
-      await loadAll();
+      // Ambil waktu kedaluwarsa sesi untuk menjadwalkan auto-logout 2 jam.
+      await boot();
     }
   } catch {
     $("login-msg").innerHTML = `<div class="alert err">Gagal menghubungi server.</div>`;

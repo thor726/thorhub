@@ -52,6 +52,18 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_usage_key_time ON usage_logs (api_key_id, created_at);
+
+  -- Pembatas brute-force login yang PERSISTEN (bertahan setelah restart).
+  -- kunci = "label:ip" (mis. "admin:1.2.3.4"), terpisah per tipe login.
+  CREATE TABLE IF NOT EXISTS login_attempts (
+    kunci         TEXT    PRIMARY KEY,
+    count_gagal   INTEGER NOT NULL DEFAULT 0,   -- jumlah percobaan gagal
+    first_at      INTEGER NOT NULL,             -- awal jendela (epoch ms)
+    blocked_until INTEGER NOT NULL DEFAULT 0,   -- diblokir sampai (epoch ms), 0 = tidak
+    last_at       INTEGER NOT NULL              -- percobaan terakhir (epoch ms)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_login_attempts_blocked ON login_attempts (blocked_until);
 `);
 
 module.exports = db;
