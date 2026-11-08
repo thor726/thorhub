@@ -118,12 +118,6 @@ body {
   background-size: 100% 70dvh;
 }
 
-/* Berlaku untuk SELURUH elemen latar bergerak (aurora) di semua halaman:
-   pastikan tidak ada celah/terpotong saat di-scroll maupun saat viewport
-   mobile berubah tinggi. */
-@supports (height: 100dvh) {
-  .cc-aurora-svg { height: calc(100dvh + 80px); }
-}
 
 body::before {
   content: "";
@@ -1197,12 +1191,18 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   mask-image: var(--aurora-mask);
   position: fixed;
   display: block;
-  /* Ruang ekstra 40px tiap sisi agar gerakan drift tak memperlihatkan tepi kosong */
-  inset: -40px;
-  width: calc(100% + 80px);
+  /* PENTING: aturan global `img, svg, video... { max-width: 100% }` akan
+     mengecap lebar SVG ini ke 100% viewport, sehingga tepi KANAN tak pernah
+     melebar melewati layar → garis gelombang terlihat terpotong lurus di kanan.
+     max-width:none membatalkan cap itu agar SVG benar-benar melebihi viewport. */
+  max-width: none;
+  /* Buffer 80px tiap sisi (lebih besar dari amplitudo drift ±30px) supaya tepi
+     SVG tidak pernah masuk ke dalam area pandang saat animasi bergerak. */
+  inset: -80px;
+  width: calc(100% + 160px);
   /* 100dvh: akurat saat address bar mobile muncul/hilang (100vh meleset) */
-  height: calc(100vh + 80px);
-  height: calc(100dvh + 80px);
+  height: calc(100vh + 160px);
+  height: calc(100dvh + 160px);
   z-index: -1;
   pointer-events: none;
   filter: opacity(var(--aurora-strength));
