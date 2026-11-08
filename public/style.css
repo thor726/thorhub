@@ -853,6 +853,84 @@ pre:hover { border-color: var(--border-2); }
 .stat-strip .cell .v.lime { color: var(--lime); }
 
 /* ==============================================================
+   DASHBOARD MEMBER — header, kuota, grafik, ringkasan
+   ============================================================== */
+.dash-head { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-5); }
+.dash-avatar {
+  width: 52px; height: 52px;
+  flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--lime-bg);
+  border: 1px solid var(--lime-line);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 22px; font-weight: 700;
+  color: var(--lime);
+}
+.dash-head h1 { font-size: clamp(20px, 4.5vw, 26px); margin: 0; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 62vw; display: inline-block; vertical-align: bottom; }
+
+/* Teks bantu di bawah angka kartu stat */
+.stat .u2 { font-family: var(--mono); font-size: 11px; color: var(--muted-2); margin-top: var(--s-1); }
+
+/* Bar kuota */
+.quota-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.quota-bar {
+  height: 10px;
+  background: var(--input-dk);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.quota-fill {
+  height: 100%;
+  width: 0;
+  background: var(--lime);
+  border-radius: var(--radius-full);
+  transition: width .8s var(--ease), background var(--t) ease;
+}
+.quota-fill.warn { background: var(--amber); }
+.quota-fill.danger { background: var(--red); }
+
+/* Grafik batang harian */
+.chart { min-width: 0; }
+.chart-legend {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-3); flex-wrap: wrap;
+  font-family: var(--mono); font-size: 11px; color: var(--text-body);
+  margin-bottom: var(--s-3);
+}
+.chart-legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: var(--lime); margin-right: var(--s-2); vertical-align: -1px; }
+.chart-svg { display: block; width: 100%; height: 130px; overflow: visible; }
+.chart-svg .bar { fill: var(--lime); opacity: .85; animation: barGrow .5s var(--ease) both; transform-origin: bottom; }
+.chart-svg .bar:hover { opacity: 1; }
+.chart-svg .bar.empty { fill: var(--border-2); opacity: .5; }
+.chart-x {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 10px; color: var(--muted-2);
+  margin-top: var(--s-2);
+}
+@keyframes barGrow { from { transform: scaleY(.02); opacity: 0; } to { transform: scaleY(1); opacity: .85; } }
+
+/* Daftar ringkasan kunci-nilai */
+.kv { display: flex; flex-direction: column; }
+.kv-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.kv-row:last-child { border-bottom: none; }
+.kv-row span { color: var(--muted); font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.kv-row b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+.kv-row b.ok { color: var(--lime); }
+.kv-row b.bad { color: var(--red); }
+
+@media (min-width: 900px) {
+  .chart-svg { height: 170px; }
+}
+
+/* ==============================================================
    HALAMAN 404
    ============================================================== */
 .notfound-logo { animation: scaleIn .4s var(--ease) both; }
@@ -988,18 +1066,36 @@ pre:hover { border-color: var(--border-2); }
 }
 .o-node:hover { border-color: var(--lime-line); color: var(--lime); }
 /* Label berputar balik supaya teks tetap tegak */
-.o-node .t { animation: orbit-ccw 44s linear infinite; display: grid; place-items: center; width: 100%; height: 100%; }
+.o-node .t { animation: orbit-ccw 44s linear infinite; display: grid; place-items: center; width: 100%; height: 100%; position: relative; z-index: 1; }
 
-/* Logo brand di dalam simpul — monokrom, ikut warna teks */
+/* Logo brand di dalam simpul — warna brand asli, hidup & ber-glow */
 .o-node .o-logo {
   width: 26px;
   height: 26px;
-  fill: var(--text-body);
+  fill: var(--brand, var(--text-body));
   stroke: none;
-  transition: fill var(--t) ease, transform var(--t) ease;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--brand, transparent) 55%, transparent));
+  transition: transform var(--t) var(--ease), filter var(--t) ease;
 }
 .o-node.sm .o-logo { width: 21px; height: 21px; }
-.o-node:hover .o-logo { fill: var(--lime); transform: scale(1.08); }
+.o-node:hover { border-color: var(--brand, var(--lime-line)); }
+.o-node:hover .o-logo {
+  transform: scale(1.12);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--brand, transparent) 85%, transparent))
+          drop-shadow(0 0 2px var(--brand, transparent));
+}
+/* Lingkaran lembut di belakang logo supaya warna brand "menyala" di latar gelap */
+.o-node::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--brand, transparent) 18%, transparent), transparent 70%);
+  opacity: .7;
+  transition: opacity var(--t) ease;
+  pointer-events: none;
+}
+.o-node:hover::after { opacity: 1; }
 /* Inisial (cadangan bila logo tak tersedia) */
 .o-node .o-initial { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .02em; color: var(--text-body); }
 .orbit-ring.rev .o-node { transform: rotate(var(--a)) translateY(calc(-1 * var(--orbit-r))) rotate(calc(-1 * var(--a))); }

@@ -251,9 +251,21 @@ router.get("/member/me", requireMemberSession, (req, res) => {
     session.destroySession(session.parseCookies(req.headers.cookie)[session.MEMBER_COOKIE]);
     return res.status(401).json({ error: { message: "Key Anda sudah tidak terdaftar.", code: "invalid_api_key" } });
   }
+
+  // Ringkasan tambahan dari log pemakaian (jumlah request & rincian token)
+  const agg = db
+    .prepare(
+      `SELECT COUNT(*) AS requests,
+              COALESCE(SUM(prompt_tokens), 0)     AS prompt_tokens,
+              COALESCE(SUM(completion_tokens), 0) AS completion_tokens
+       FROM usage_logs WHERE api_key_id = ? AND status = 'ok'`
+    )
+    .get(row.id);
+
   res.json({
     data: {
       role: "member",
+      id: row.id,
       user_name: row.user_name,
       api_key: row.api_key,
       token_limit: row.token_limit,
@@ -261,8 +273,93 @@ router.get("/member/me", requireMemberSession, (req, res) => {
       tokens_remaining: Math.max(0, row.token_limit - row.tokens_used),
       is_active: !!row.is_active,
       created_at: row.created_at,
+      requests: agg.requests,
+      prompt_tokens: agg.prompt_tokens,
+      completion_tokens: agg.completion_tokens,
     },
   });
 });
+
+// GET /portal/member/usage — pemakaian per model, harian (30 hari), dan log terakhir
+router.get("/member/usage", requireMemberSession, (req, res) => {
+  const row = db.prepare("SELECT * FROM api_keys WHERE api_key = ?").get(req.session.api_key);
+  if (!row) {
+    session.destroySession(session.parseCookies(req.headers.cookie)[session.MEMBER_COOKIE]);
+    return res.status(401).json({ error: { message: "Key Anda sudah tidak terdaftar.", code: "invalid_api_key" } });
+  }
+
+  // Pemakaian per model (urut terbanyak). Multiplier diambil dari katalog model.
+  const byModel = db
+    .prepare(
+      `SELECT model,
+              COUNT(*) AS requests,
+              COALESCE(SUM(prompt_tokens), 0)     AS prompt_tokens,
+              COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+              COALESCE(SUM(total_tokens), 0)      AS total_tokens
+       FROM usage_logs
+       WHERE api_key_id = ? AND status = 'ok'
+       GROUP BY model
+       ORDER BY total_tokens DESC
+       LIMIT 20`
+    )
+    .all(row.id)
+    .map((r) => ({
+      ...r,
+      model: r.model || "(tidak diketahui)",
+      multiplier: multiplierOf(r.model),
+    }));
+
+  // Pemakaian harian 30 hari terakhir (termasuk hari tanpa pemakaian = 0)
+  const hari = db
+    .prepare(
+      `SELECT substr(created_at, 1, 10) AS tanggal,
+              COUNT(*) AS requests,
+              COALESCE(SUM(total_tokens), 0) AS total_tokens
+       FROM usage_logs
+       WHERE api_key_id = ? AND status = 'ok'
+         AND created_at >= date('now', '-29 days')
+       GROUP BY tanggal`
+    )
+    .all(row.id);
+  const petaHari = new Map(hari.map((h) => [h.tanggal, h]));
+  const byDay = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const h = petaHari.get(d);
+    byDay.push({ tanggal: d, requests: h ? h.requests : 0, total_tokens: h ? h.total_tokens : 0 });
+  }
+
+  // Log request terakhir
+  const logs = db
+    .prepare(
+      `SELECT model, prompt_tokens, completion_tokens, total_tokens, status, created_at
+       FROM usage_logs WHERE api_key_id = ?
+       ORDER BY id DESC LIMIT 50`
+    )
+    .all(row.id)
+    .map((l) => ({ ...l, model: l.model || "(tidak diketahui)" }));
+
+  res.json({
+    data: {
+      summary: {
+        token_limit: row.token_limit,
+        tokens_used: row.tokens_used,
+        tokens_remaining: Math.max(0, row.token_limit - row.tokens_used),
+        percent_used: row.token_limit > 0 ? Math.round((row.tokens_used / row.token_limit) * 100) : 0,
+        is_active: !!row.is_active,
+      },
+      by_model: byModel,
+      by_day: byDay,
+      logs,
+    },
+  });
+});
+
+/** Ambil multiplier model dari katalog lokal (1 bila tidak ditemukan). */
+function multiplierOf(modelId) {
+  if (!modelId) return 1;
+  const m = models.MODELS.find((x) => x.id === modelId);
+  return m && Number.isFinite(m.multiplier) ? m.multiplier : 1;
+}
 
 module.exports = router;

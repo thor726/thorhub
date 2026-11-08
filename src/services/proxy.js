@@ -19,6 +19,10 @@ const limiter = require("./limiter");
 // Prepared statement: dibuat sekali, cepat & bebas SQL injection
 const stmtAddUsage = db.prepare("UPDATE api_keys SET tokens_used = tokens_used + ? WHERE id = ?");
 const stmtGetKeyById = db.prepare("SELECT * FROM api_keys WHERE id = ?");
+const stmtLogUsage = db.prepare(
+  `INSERT INTO usage_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, status)
+   VALUES (?, ?, ?, ?, ?, ?)`
+);
 
 /** Error yang membawa status + body dari provider (diteruskan apa adanya). */
 class UpstreamError extends Error {
@@ -65,16 +69,36 @@ function extractTotalTokens(usage) {
   return prompt + completion;
 }
 
-/** Tambahkan pemakaian token pembeli ke database. */
-function countTokens(subKey, total) {
+/**
+ * Tambahkan pemakaian token pembeli ke database + catat ke log pemakaian.
+ * @param {object} subKey  baris api_keys milik pembeli
+ * @param {number} total   token yang dipotong dari kuota (sudah dikali multiplier model)
+ * @param {{model?:string, prompt?:number, completion?:number, status?:string}} info  detail untuk log
+ */
+function countTokens(subKey, total, info = {}) {
+  const model = info.model || null;
+  const prompt = Number.isFinite(info.prompt) ? info.prompt : 0;
+  const completion = Number.isFinite(info.completion) ? info.completion : 0;
+  const status = info.status || "ok";
+
   if (!total || total <= 0) {
+    // Tetap catat kejadiannya supaya member bisa melihat request yang tidak tercatat tokennya
+    try {
+      stmtLogUsage.run(subKey.id, model, prompt, completion, 0, status === "ok" ? "no_usage" : status);
+    } catch { /* log gagal tidak boleh mengganggu request */ }
     console.warn(`[token] PERINGATAN: usage tidak ada di response provider — token tidak dihitung (key #${subKey.id})`);
     return;
   }
+
   stmtAddUsage.run(total, subKey.id);
+  try {
+    stmtLogUsage.run(subKey.id, model, prompt, completion, total, status);
+  } catch (e) {
+    console.error("[token] gagal menulis usage_logs:", e.message);
+  }
   const updated = stmtGetKeyById.get(subKey.id);
   console.log(
-    `[token] ${subKey.api_key.slice(0, 16)}… (${subKey.user_name}) +${total} token → ${updated.tokens_used}/${updated.token_limit}`
+    `[token] ${subKey.api_key.slice(0, 16)}… (${subKey.user_name}) +${total} token [${model || "?"}] → ${updated.tokens_used}/${updated.token_limit}`
   );
 }
 
@@ -145,12 +169,17 @@ async function doForward(state, subKey, payload, res) {
 
   // Mode streaming: pipe SSE + "tap" untuk mencatat usage di chunk terakhir
   if ((isStreamRequest || contentType.includes("text/event-stream")) && response.body) {
-    return streamToClient(response, res, subKey);
+    return streamToClient(response, res, subKey, payload.model);
   }
 
   // Mode biasa: baca JSON, hitung token, kembalikan response utuh
   const data = await response.json();
-  countTokens(subKey, extractTotalTokens(data.usage));
+  const u = data.usage || {};
+  countTokens(subKey, extractTotalTokens(data.usage), {
+    model: data.model || payload.model,
+    prompt: u.prompt_tokens,
+    completion: u.completion_tokens,
+  });
   res.status(response.status).json(data);
 }
 
@@ -159,7 +188,7 @@ async function doForward(state, subKey, payload, res) {
  * Banyak provider menyisipkan objek `usage` pada chunk terakhir — di situlah
  * token dihitung.
  */
-async function streamToClient(response, res, subKey) {
+async function streamToClient(response, res, subKey, reqModel) {
   res.status(200);
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -183,7 +212,12 @@ async function streamToClient(response, res, subKey) {
         const parsed = JSON.parse(jsonStr);
         if (parsed.usage) {
           counted = true;
-          countTokens(subKey, extractTotalTokens(parsed.usage));
+          const u = parsed.usage;
+          countTokens(subKey, extractTotalTokens(u), {
+            model: parsed.model || reqModel,
+            prompt: u.prompt_tokens,
+            completion: u.completion_tokens,
+          });
         }
       } catch {
         /* baris belum utuh / bukan JSON — abaikan */

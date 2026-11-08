@@ -38,6 +38,20 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at);
+
+  -- Log pemakaian per request (untuk grafik & riwayat di dashboard member)
+  CREATE TABLE IF NOT EXISTS usage_logs (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    api_key_id    INTEGER NOT NULL,           -- FK logis ke api_keys.id
+    model         TEXT,                        -- model yang dipakai
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens  INTEGER NOT NULL DEFAULT 0,  -- token efektif yang dipotong dari kuota
+    status        TEXT NOT NULL DEFAULT 'ok',  -- 'ok' | 'error'
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_usage_key_time ON usage_logs (api_key_id, created_at);
 `);
 
 module.exports = db;
