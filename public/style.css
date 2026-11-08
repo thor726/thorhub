@@ -166,23 +166,12 @@ input[type="checkbox"], input[type="radio"], [role="tab"] { cursor: pointer; }
   }
 }
 
-.stagger > * { animation: fadeUp var(--t-slow) var(--ease) both; }
-.stagger > *:nth-child(1) { animation-delay: .02s; }
-.stagger > *:nth-child(2) { animation-delay: .05s; }
-.stagger > *:nth-child(3) { animation-delay: .08s; }
-.stagger > *:nth-child(4) { animation-delay: .11s; }
-.stagger > *:nth-child(5) { animation-delay: .14s; }
-.stagger > *:nth-child(6) { animation-delay: .17s; }
-.stagger > *:nth-child(n+7) { animation-delay: .2s; }
+/* Animasi "muncul" anak .stagger dipindah ke public/muncul.js (pra-render
+   ber-buffer) agar tidak memicu frame berat saat elemen masuk layar.
+   animation-delay di bawah kini diisi oleh muncul.js per-elemen (hanya untuk
+   elemen yang benar-benar dianimasikan); aturan nth-child lama dihapus. */
+.stagger > * { opacity: 1; }
 
-.stagger-rows tbody tr { animation: fadeIn .25s var(--ease) both; }
-.stagger-rows tbody tr:nth-child(1) { animation-delay: .01s; }
-.stagger-rows tbody tr:nth-child(2) { animation-delay: .03s; }
-.stagger-rows tbody tr:nth-child(3) { animation-delay: .05s; }
-.stagger-rows tbody tr:nth-child(4) { animation-delay: .07s; }
-.stagger-rows tbody tr:nth-child(5) { animation-delay: .09s; }
-.stagger-rows tbody tr:nth-child(6) { animation-delay: .11s; }
-.stagger-rows tbody tr:nth-child(n+7) { animation-delay: .13s; }
 
 /* ==============================================================
    LAYOUT
@@ -413,7 +402,11 @@ strong, b { color: var(--text); }
   margin-bottom: var(--s-4);
   box-shadow: var(--shadow-card);
   transition: border-color var(--t) ease;
-  animation: riseIn .4s var(--ease) both;
+  /* Animasi "muncul" DIPINDAH ke public/muncul.js (pra-render ber-buffer 400px).
+     Sebelumnya `animation: riseIn` menyala untuk SEMUA kartu — termasuk yang
+     jauh di bawah layar — sehingga browser harus mengejar render elemen itu saat
+     pengguna menggulir ke sana: satu frame berat per elemen. Lihat blok
+     "PRA-RENDER MUNCUL" di bagian bawah berkas. */
 }
 .card:hover { border-color: var(--border-2); }
 @media (min-width: 641px) {
@@ -1763,4 +1756,41 @@ img, svg { max-width: 100%; height: auto; }
   /* Orbit sudah diperkecil oleh breakpoint ≤640px; cukup pastikan tidak
      menahan layer tambahan yang tak perlu di ponsel. */
   .orbit-ring { will-change: auto; }
+}
+
+/* ==============================================================
+   PRA-RENDER "MUNCUL" (buffer viewport) — lihat public/muncul.js
+   ==============================================================
+   Mengapa: dulu .card / .stagger > * / .stagger-rows tr memakai animasi
+   entrance (riseIn / fadeUp / fadeIn) TANPA SYARAT, sehingga elemen yang masih
+   jauh di bawah layar pun sudah beranimasi; saat pengguna menggulir ke sana
+   browser harus menyiapkan layer-nya mendadak → frame berat (terukur di
+   /docs @1440px: 9 frame > 33ms, p95 34.6ms, terburuk 48ms). Kini animasi itu
+   hanya dijalankan SAAT elemen mendekati layar, dipandu IntersectionObserver
+   ber-buffer 400px (rootMargin). Strategi ini = pre-render/buffer persis yang
+   diminta, dan TIDAK memakai culling agresif: tidak ada display:none,
+   content-visibility, maupun penghapusan DOM — hanya opacity + transform
+   (murni compositor, tanpa re-layout) dan selalu dikembalikan lewat jaring
+   pengaman di muncul.js.
+
+   Aturan di bawah HANYA berlaku untuk elemen yang belum masuk buffer (class
+   .pra-render ditambahkan oleh muncul.js). Elemen yang sudah terlihat TIDAK
+   pernah disembunyikan. */
+.pra-render { opacity: 0; }
+.pra-render.masuk-jalan { opacity: 1; animation: masukBuffer .42s var(--ease) both; }
+.masuk-selesai { opacity: 1; }
+
+/* Keyframes entrance dipakai HANYA lewat kelas sementara .masuk-jalan (bukan
+   menempel permanen di elemen), supaya tidak ada animasi yang berjalan diam-diam
+   di luar layar. Will-change dilepas otomatis: setelah animasi selesai, kelas
+   .masuk-jalan dilepas muncul.js sehingga petunjuk layer tidak menumpuk. */
+@keyframes masukBuffer {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Hormati prefers-reduced-motion: tanpa animasi, elemen langsung tampil. */
+@media (prefers-reduced-motion: reduce) {
+  .pra-render { opacity: 1 !important; }
+  .pra-render.masuk-jalan { animation: none !important; }
 }
