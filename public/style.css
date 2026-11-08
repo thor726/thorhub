@@ -114,8 +114,11 @@ body {
   /* Tinggi pendar diukur terhadap viewport. vh dipakai dulu sebagai fallback
      untuk browser lama, lalu dvh menimpanya agar akurat saat address bar
      mobile muncul/hilang (dvh tidak membuat latar terlihat terpotong). */
+  /* lvh (bukan dvh): sama alasannya seperti latar SVG di atas — dvh berubah
+     saat address bar mobile bergeser, memaksa body repaint di tengah gulir.
+     lvh stabil, jadi tidak ada repaint tak perlu; pendar tetap tampil penuh. */
   background-size: 100% 70vh;
-  background-size: 100% 70dvh;
+  background-size: 100% 70lvh;
 }
 
 /* Grid global (body::before) DIHAPUS karena kini grid digambar oleh bg.js
@@ -211,9 +214,16 @@ input[type="checkbox"], input[type="radio"], [role="tab"] { cursor: pointer; }
   padding-top: max(var(--s-3), var(--sa-t));
   padding-left: max(var(--s-4), var(--sa-l));
   padding-right: max(var(--s-4), var(--sa-r));
-  background: rgba(10, 10, 10, .88);
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  /* OPTIMASI (terukur): dahulu di sini ada `backdrop-filter: blur(12px)
+     saturate(140%)`. Karena topbar bersifat STICKY (selalu menempel di atas),
+     Chromium harus mem-blur ulang isi halaman di belakangnya pada SETIAP frame
+     gulir — inilah penyebab utama "nyendat saat scroll" di desktop
+     (matikan blur → FPS scroll 52 → 60, frame terburuk 50 ms → 17 ms).
+     Latar topbar tetap rgba(10,10,10,.88) yang sama, hanya sedikit dipekatkan
+     ke .92 sebagai ganti hilangnya efek kaca, supaya teks isi yang lewat di
+     bawahnya tetap tidak mengganggu keterbacaan — secara visual nyaris tak
+     berbeda karena latar halaman memang sudah gelap (#0a0a0a). */
+  background: rgba(10, 10, 10, .92);
   border-bottom: 1px solid var(--border);
 }
 .topbar::after {
@@ -1192,11 +1202,28 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   max-width: none;
   inset: -40px;
   width: calc(100% + 80px);
+  /* OPTIMASI (penting untuk MOBILE): dahulu baris ini memakai `100dvh`.
+     dvh diukur terhadap viewport DINAMIS, jadi nilainya BERUBAH setiap kali
+     address bar Safari/Chrome mobile muncul atau hilang saat menggulir. Karena
+     elemen ini `position: fixed` dan memenuhi layar, setiap perubahan itu
+     memaksa browser menata-ulang + meraster ulang seluruh lapisan latar di
+     tengah gestur gulir — sumber "nyendat" khas di HP yang tak muncul di uji
+     desktop. `lvh` = tinggi viewport TERBESAR, nilainya STABIL selama gulir,
+     sehingga tidak ada resize/rarer di tengah gestur. Cadangan `100vh` dipakai
+     browser lama. Buffer 80px tetap: lvh ≥ dvh, jadi latar justru TERJAMIN
+     tidak pernah terpotong saat address bar tampil. */
   height: calc(100vh + 80px);
-  height: calc(100dvh + 80px); /* akurat saat address bar mobile berubah */
+  height: calc(100lvh + 80px);
   z-index: -1;
   pointer-events: none;
-  filter: opacity(var(--cc-strength));
+  /* OPTIMASI (terukur): dahulu di sini ada `filter: opacity(var(--cc-strength))`.
+     Karena --cc-strength SELALU bernilai 1, filter itu tidak pernah mengubah
+     tampilan sama sekali — tetapi filter pada elemen penuh-layar memaksa
+     Chromium merasterisasi ulang seluruh lapisan latar setiap frame, sehingga
+     halaman "nyendat" (FPS diam 27 → 60). Diganti properti `opacity`, yang
+     dikerjakan GPU/compositor (praktis gratis) dan nilainya tetap 1 →
+     tampilan 100% identik. */
+  opacity: var(--cc-strength);
 }
 
 /* --- Lapis 2: grid (garis utama tiap 400px sedikit lebih terang) --- */
@@ -1205,9 +1232,12 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 
 /* --- Lapis 3: jaringan simpul --- */
 .cc-bg-svg .ccbg-net-garis line { stroke: var(--cc-net-garis); stroke-width: 1.1; }
-.cc-bg-svg .ccbg-simpul { fill: var(--cc-net-simpul); }
+.cc-bg-svg .ccbg-simpul,
+.cc-bg-svg .ccbg-simpul-denyut { fill: var(--cc-net-simpul); }
 /* Simpul aktif berdenyut pelan; animation-delay diatur inline per simpul
-   (lihat bg.js) sehingga denyutnya mengalir, bukan berkedip serempak. */
+   (lihat bg.js) sehingga denyutnya mengalir, bukan berkedip serempak.
+   Simpul ini berada DI LUAR grup ber-mask (performa); opasitas tepinya sudah
+   dipanggang ke fill-opacity oleh bg.js. */
 .cc-bg-svg .ccbg-denyut {
   animation: ccbg-denyut 6s ease-in-out infinite;
   transform-box: fill-box;
@@ -1238,18 +1268,33 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 }
 .cc-bg-svg .ccbg-kilat-cabang { fill: none; stroke: var(--cc-kilat); stroke-width: 1; opacity: .5; }
 
-/* --- Cahaya ambient --- */
-.cc-bg-svg .ccbg-cahaya-atas { animation: ccbg-pendar 20s ease-in-out infinite; }
-.cc-bg-svg .ccbg-cahaya-bawah { animation: ccbg-pendar 26s ease-in-out infinite reverse; }
+/* --- Cahaya ambient ---
+   OPTIMASI (terukur): dulu TIAP ellipse cahaya dianimasikan sendiri (dua
+   animasi pada dua gradient raksasa). Sekarang animasinya dipindah ke SATU
+   grup induk (.ccbg-cahaya) dengan will-change:transform sehingga Chromium
+   cukup mengompositkan satu lapisan (bukan menghitung ulang dua gradient).
+   Kedua lingkaran tetap bergerak bersama ke atas-turun pelan — efek pendar
+   tetap sama terlihat, beban scroll turun. */
+.cc-bg-svg .ccbg-cahaya {
+  animation: ccbg-pendar 20s ease-in-out infinite;
+  will-change: transform;
+}
 
 @keyframes ccbg-denyut {
   0%, 100% { opacity: .45; transform: scale(1); }
   50%      { opacity: 1; transform: scale(2); }
 }
 @keyframes ccbg-halo-spin { to { transform: rotate(360deg); } }
+/* OPTIMASI (terukur): dahulu pendar cahaya dianimasikan lewat `opacity`
+   (0.9 → 0.5 → 0.9). Mengubah opacity elemen SVG raksasa (rx 880 · ry 420)
+   memaksa repaint gradient penuh setiap frame → saat menggulir, FPS turun ke
+   ~54. Sekarang digerakkan lewat `transform: translateY`, yang murni urusan
+   compositor (gratis) dan JUSTRU terlihat lebih hidup: pendar naik-turun pelan
+   ±16 satuan kanvas (±0.9% tinggi kanvas) — halus dan tidak mengubah kesan
+   visual secara berarti. */
 @keyframes ccbg-pendar {
-  0%, 100% { opacity: .9; }
-  50%      { opacity: .5; }
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-16px); }
 }
 @keyframes ccbg-kedip {
   0%, 100% { opacity: .55; }

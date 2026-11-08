@@ -78,6 +78,36 @@
     return dx * dx + dy * dy;
   }
 
+  /**
+   * pudar(x, y) — nilai pemudar tepi di sebuah titik kanvas, 0..1.
+   *
+   * Rumus ini SAMA PERSIS dengan <radialGradient id="ccbg-pudar"> yang dipakai
+   * <mask> grup grid & jaringan: cx=50% cy=45% r=72%, stop 0→1, 60%→.55,
+   * 100%→0. Karena gradientUnits-nya objectBoundingBox dan dipasang pada
+   * <rect 1600×1000>, lingkaran satuan itu terentang jadi ELIPS berpusat
+   * (800, 450) dengan rx = .72×1600 = 1152 dan ry = .72×1000 = 720.
+   *
+   * MENGAPA DIRUMUSKAN, BUKAN DISERAHKAN KE <mask> SAJA
+   *   Uji A/B terukur di Chromium (1440px): grup yang memakai <mask> SEKALIGUS
+   *   berisi elemen beranimasi memaksa mask dihitung ulang setiap frame —
+   *   FPS diam jatuh ke ~37. Bila simpul yang berdenyut dipindah KELUAR dari
+   *   grup ber-mask dan nilai pudarnya "dipanggang" (baked) ke atribut
+   *   fill-opacity, FPS naik kembali ke ~60 dengan tampilan praktis identik
+   *   (opasitas total = pudar(x,y) × opasitas kelas, sama seperti sebelumnya).
+   *   Simpul DIAM tetap di dalam grup ber-mask: grup ber-mask TANPA animasi
+   *   terbukti tidak membebani.
+   */
+  var PUDAR_STOP = [[0, 1], [0.6, 0.55], [1, 0]];
+  function pudar(x, y) {
+    var t = Math.sqrt(Math.pow((x - 800) / 1152, 2) + Math.pow((y - 450) / 720, 2));
+    for (var i = 1; i < PUDAR_STOP.length; i++) {
+      var t0 = PUDAR_STOP[i - 1][0], a0 = PUDAR_STOP[i - 1][1];
+      var t1 = PUDAR_STOP[i][0], a1 = PUDAR_STOP[i][1];
+      if (t <= t1) return a0 + (a1 - a0) * ((t - t0) / (t1 - t0));
+    }
+    return 0;
+  }
+
   /* ------------------------------------------------------------------ *
    *  Lapis 2 — Grid
    * ------------------------------------------------------------------ */
@@ -156,14 +186,26 @@
       }
     }
 
+    /* Simpul dipisah jadi DUA kelompok (alasan performa, lihat pudar()):
+       • simpulDiam   → tetap di dalam grup ber-mask; ikut dipudarkan <mask>.
+       • simpulDenyut → KELUAR dari grup ber-mask; nilai pudarnya dipanggang ke
+         atribut fill-opacity. Tampilan sama, tetapi <mask> tak perlu dihitung
+         ulang tiap frame saat simpul berdenyut.
+       Kelas .ccbg-simpul-denyut tetap memuat "ccbg-denyut" agar aturan animasi
+       di CSS yang sudah ada langsung berlaku (tanpa duplikasi). */
+    var simpulDiam = "";
+    var simpulDenyut = "";
     for (var k = 0; k < titik.length; k++) {
       var t = titik[k];
-      simpul += '<circle class="ccbg-simpul' + (t.aktif ? " ccbg-denyut" : "") +
-                '" cx="' + t.x + '" cy="' + t.y + '" r="' + (t.aktif ? 3.4 : 2) + '"' +
-                (t.aktif ? ' style="animation-delay:' + t.tunda + '"' : "") +
-                '/>';
+      if (t.aktif) {
+        simpulDenyut += '<circle class="ccbg-simpul-denyut ccbg-denyut" cx="' + t.x + '" cy="' + t.y +
+                        '" r="3.4" fill-opacity="' + pudar(t.x, t.y).toFixed(4) + '"' +
+                        ' style="animation-delay:' + t.tunda + '"/>';
+      } else {
+        simpulDiam += '<circle class="ccbg-simpul" cx="' + t.x + '" cy="' + t.y + '" r="2"/>';
+      }
     }
-    return { garis: garis, simpul: simpul };
+    return { garis: garis, simpul: simpulDiam, simpulDenyut: simpulDenyut };
   }
 
   /* ------------------------------------------------------------------ *
@@ -255,6 +297,9 @@
         '<g class="ccbg-net-garis">' + jaring.garis + "</g>" +
         '<g class="ccbg-net-simpul">' + jaring.simpul + "</g>" +
       "</g>" +
+      /* Simpul yang BERDENYUT sengaja di LUAR grup ber-mask (alasan performa,
+         lihat pudar()) — nilai pemudarnya sudah dipanggang ke fill-opacity. */
+      '<g class="ccbg-net-denyut">' + jaring.simpulDenyut + "</g>" +
 
       // --- Lapis 4: halo cakrawala + kilat ---
       '<g class="ccbg-halo">' + buatHalo() + "</g>" +

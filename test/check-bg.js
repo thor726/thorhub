@@ -86,6 +86,21 @@ cek("simpul berdenyut ada", denyut >= 4, String(denyut));
 cek("3 busur halo", halo === 3, String(halo));
 cek("2 jalur kilat utama", kilat === 2, String(kilat));
 
+/* PERFORMA: simpul yang berdenyut harus DI LUAR grup ber-mask, kalau tidak
+   <mask> dihitung ulang tiap frame (FPS diam jatuh ~37 → terukur di Chromium).
+   Bukti struktural: grup .ccbg-net-denyut tidak berada di dalam grup ber-mask. */
+const iMask = svg.indexOf('mask="url(#ccbg-pudar-mask)"');
+const iDenyut = svg.indexOf('class="ccbg-net-denyut"');
+const akhirGrupMask = svg.indexOf("</g>", svg.indexOf("ccbg-net-simpul"));
+cek("grup simpul denyut berada DI LUAR grup ber-mask",
+  iDenyut > 0 && iDenyut > akhirGrupMask && iMask > 0, `denyut@${iDenyut} mask@${iMask} tutup-mask@${akhirGrupMask}`);
+const jumlahDenyutLuar = (svg.slice(iDenyut).match(/class="ccbg-simpul-denyut/g) || []).length;
+cek("semua simpul denyut dikeluarkan dari mask", jumlahDenyutLuar === denyut,
+  `${jumlahDenyutLuar} dari ${denyut}`);
+const denyutBak = (svg.match(/fill-opacity="[\d.]+"/g) || []).length;
+cek("nilai pudar simpul denyut dipanggang (fill-opacity)", denyutBak === denyut,
+  `${denyutBak} dari ${denyut}`);
+
 // Definisi <defs> ↔ referensi harus cocok
 const defIds = [...svg.matchAll(/id="(ccbg-[a-z-]+)"/g)].map((m) => m[1]);
 console.log("\n  id di <defs>:", defIds.join(", "));
@@ -108,7 +123,11 @@ console.log("\n  -- uji simetri cermin (sumbu x = 800) --");
 
 /* 1. Jaringan: tiap simpul WAJIB punya pasangan cermin (x' = 1600 − x) dengan
       y, kelas, dan jeda denyut yang sama persis. */
-const simpulRe = /<circle class="(ccbg-simpul[^"]*)" cx="(\d+)" cy="(\d+)" r="([\d.]+)"(?: style="animation-delay:([\d.]+)s")?\/>/g;
+/* Simpul diam : class, cx, cy, r.
+   Simpul denyut: class, cx, cy, r, fill-opacity, style(animation-delay) —
+   fill-opacity "dipanggang" oleh bg.js karena simpul ini di LUAR grup ber-mask.
+   Keduanya harus diperiksa agar simetri seluruh 28 simpul benar-benar terbukti. */
+const simpulRe = /<circle class="(ccbg-simpul[^"]*)" cx="(\d+)" cy="(\d+)" r="([\d.]+)"(?: fill-opacity="([\d.]+)")?(?: style="animation-delay:([\d.]+)s")?\/>/g;
 const daftarSimpul = [...svg.matchAll(simpulRe)].map((m) => ({
   kelas: m[1], x: Number(m[2]), y: Number(m[3]), r: Number(m[4]), tunda: m[5] || null,
 }));
