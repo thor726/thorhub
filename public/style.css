@@ -809,9 +809,10 @@ pre:hover { border-color: var(--border-2); }
 .live-box .v::after { content: "_"; color: var(--lime); animation: liveBlink 1s step-end infinite; margin-left: 2px; }
 .live-box .u { font-size: 11px; color: var(--muted-2); }
 
-/* Hero 2 kolom: teks kiri, live-box kanan */
+/* Hero 2 kolom: teks kiri, orbit + live-box kanan */
 .hero-grid { display: grid; grid-template-columns: 1fr; gap: var(--s-6); align-items: center; }
-@media (min-width: 900px) { .hero-grid { grid-template-columns: 1.4fr 1fr; gap: var(--s-8); } }
+@media (min-width: 900px) { .hero-grid { grid-template-columns: 1.35fr 1fr; gap: var(--s-8); } }
+.hero-side { display: flex; flex-direction: column; align-items: center; gap: var(--s-4); }
 
 /* Kartu fitur bernomor (// 01, // 02 …) */
 .feature { border-top: 1px solid var(--border); padding-top: var(--s-4); }
@@ -866,3 +867,139 @@ pre:hover { border-color: var(--border-2); }
 
 /* Logo di dalam judul */
 .hero-bolt { display: inline-block; width: 1em; height: 1em; vertical-align: -.12em; }
+
+/* ==============================================================
+   AURORA — lapisan latar bergerak (referensi clariohub.id)
+   Drift 60s + halo pulse 14s. Zona animasi adaptif & hemat (GPU).
+   ============================================================== */
+.cc-aurora { isolation: isolate; }
+.cc-aurora-svg {
+  --aurora-lime: #a3e635;
+  --aurora-blue: #3b82f6;
+  --aurora-violet: #a78bfa;
+  --aurora-strength: 1;
+  --aurora-halo-opacity: .14;
+  --aurora-sharp-opacity: .32;
+  --aurora-ribbon-opacity: .06;
+  --aurora-ellipse-opacity: .08;
+  --aurora-drift-duration: 60s;
+  --aurora-pulse-duration: 14s;
+  --aurora-pulse-low: .10;
+  --aurora-pulse-high: .18;
+  --aurora-mask: linear-gradient(180deg, #000 55%, transparent 98%);
+  -webkit-mask-image: var(--aurora-mask);
+  mask-image: var(--aurora-mask);
+  position: fixed;
+  display: block;
+  inset: -40px;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  z-index: -1;
+  pointer-events: none;
+  filter: opacity(var(--aurora-strength));
+  animation: cc-aurora-drift var(--aurora-drift-duration) ease-in-out infinite;
+}
+.cc-aurora-halo { opacity: var(--aurora-halo-opacity); animation: cc-aurora-pulse var(--aurora-pulse-duration) ease-in-out infinite; }
+.cc-aurora-sharp { opacity: var(--aurora-sharp-opacity); }
+
+@keyframes cc-aurora-drift {
+  0%, 100% { transform: translate3d(-30px, -15px, 0); }
+  50%      { transform: translate3d(30px, 15px, 0); }
+}
+@keyframes cc-aurora-pulse {
+  0%, 100% { opacity: var(--aurora-pulse-low); }
+  50%      { opacity: var(--aurora-pulse-high); }
+}
+/* Bar bergaya "uptime" tumbuh dari bawah */
+@keyframes uptime-fade-in {
+  from { opacity: .25; transform: scaleY(.6); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+@keyframes orbit-cw  { to { transform: rotate(360deg); } }
+@keyframes orbit-ccw { to { transform: rotate(-360deg); } }
+
+/* ==============================================================
+   ORBIT VENDOR — "Powered by leading AI models"
+   ============================================================== */
+.orbit-wrap { display: grid; place-items: center; padding: var(--s-5) 0 var(--s-2); }
+.orbit {
+  --orbit-r: clamp(102px, 29vw, 132px);
+  position: relative;
+  width: calc(2 * var(--orbit-r) + 60px);
+  height: calc(2 * var(--orbit-r) + 60px);
+  flex-shrink: 0;
+}
+/* Cahaya pusat */
+.orbit::before {
+  content: "";
+  position: absolute;
+  inset: 26%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(163, 230, 53, .12), transparent 70%);
+  pointer-events: none;
+}
+.orbit-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px dashed var(--border);
+  border-radius: 50%;
+  animation: orbit-cw 44s linear infinite;
+}
+.orbit-ring.rev {
+  inset: 15%;
+  border-color: rgba(163, 230, 53, .14);
+  animation: orbit-ccw 34s linear infinite;
+}
+/* Inti: logo ThorHub */
+.orbit-core {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72px; height: 72px;
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  z-index: 2;
+  box-shadow: 0 0 0 6px rgba(163, 230, 53, .05);
+}
+.orbit-core img { width: 38px; height: 38px; display: block; }
+
+/* Simpul vendor */
+.o-node {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 52px; height: 52px;
+  margin: -26px 0 0 -26px;
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-body);
+  letter-spacing: .02em;
+  text-align: center;
+  transform: rotate(var(--a)) translateY(calc(-1 * var(--orbit-r))) rotate(calc(-1 * var(--a)));
+  transition: border-color var(--t) ease, color var(--t) ease;
+}
+.o-node:hover { border-color: var(--lime-line); color: var(--lime); }
+/* Label berputar balik supaya teks tetap tegak */
+.o-node .t { animation: orbit-ccw 44s linear infinite; }
+.orbit-ring.rev .o-node { transform: rotate(var(--a)) translateY(calc(-1 * var(--orbit-r))) rotate(calc(-1 * var(--a))); }
+.orbit-ring.rev .o-node .t { animation: orbit-cw 34s linear infinite; }
+
+/* Ring di dalam lebih kecil (radius disesuaikan) */
+.orbit-ring.rev .o-node {
+  width: 44px; height: 44px;
+  margin: -22px 0 0 -22px;
+  font-size: 9px;
+  transform: rotate(var(--a)) translateY(calc(-1 * var(--orbit-r) * .70)) rotate(calc(-1 * var(--a)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-aurora-svg, .cc-aurora-halo, .orbit-ring, .o-node .t { animation: none !important; }
+}

@@ -8,7 +8,29 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/style.css" />
 </head>
-<body>
+<body class="cc-aurora">
+  <!-- AURORA — lapisan latar bergerak (gaya clariohub) -->
+  <svg class="cc-aurora-svg" aria-hidden="true" focusable="false" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="cc-aurora-glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="6"/></filter>
+      <filter id="cc-aurora-ribbon-blur" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="12"/></filter>
+      <linearGradient id="cc-aurora-ribbon-lime" x1="0" y1="0" x2="1" y2=".3"><stop stop-color="var(--aurora-lime)" stop-opacity="0"/><stop offset=".5" stop-color="var(--aurora-lime)"/><stop offset="1" stop-color="var(--aurora-blue)" stop-opacity="0"/></linearGradient>
+      <linearGradient id="cc-aurora-ribbon-violet" x1="0" y1="0" x2="1" y2=".5"><stop stop-color="var(--aurora-blue)" stop-opacity="0"/><stop offset=".5" stop-color="var(--aurora-violet)"/><stop offset="1" stop-color="var(--aurora-violet)" stop-opacity="0"/></linearGradient>
+      <radialGradient id="cc-aurora-top-glow"><stop stop-color="var(--aurora-blue)" stop-opacity="var(--aurora-ellipse-opacity)"/><stop offset="1" stop-color="var(--aurora-violet)" stop-opacity="0"/></radialGradient>
+      <g id="cc-aurora-curves" fill="none">
+        <path d="M-50 800 C300 700 200 400 600 450 S1100 200 1500 300" stroke="var(--aurora-lime)"/>
+        <path d="M-80 350 C180 50 490 160 520 390 S980 810 1510 510" stroke="var(--aurora-blue)"/>
+        <path d="M-60 590 C260 920 430 570 780 610 S1050 20 1500 140" stroke="var(--aurora-violet)"/>
+      </g>
+    </defs>
+    <ellipse cx="760" cy="20" rx="680" ry="320" fill="url(#cc-aurora-top-glow)"/>
+    <g opacity="var(--aurora-ribbon-opacity)" filter="url(#cc-aurora-ribbon-blur)">
+      <path d="M180 -100 C700 50 160 360 560 510 S780 770 640 1000 L950 1000 C1060 680 670 530 750 340 S930 0 480 -100 Z" fill="url(#cc-aurora-ribbon-lime)"/>
+      <path d="M780 -100 C1250 120 600 340 980 610 S1100 810 970 1000 L1290 1000 C1450 730 1120 520 1150 370 S1550 100 1100 -100 Z" fill="url(#cc-aurora-ribbon-violet)"/>
+    </g>
+    <g class="cc-aurora-halo"><use href="#cc-aurora-curves" filter="url(#cc-aurora-glow)" stroke-width="1.5"/></g>
+    <use class="cc-aurora-sharp" href="#cc-aurora-curves" stroke-width="1"/>
+  </svg>
   <main class="wrap narrow center" style="padding-top:64px">
     <img class="notfound-logo" src="/logo.svg" alt="ThorHub" width="72" height="72" style="margin-bottom:16px" />
     <h1 class="notfound-code" style="display:block;justify-content:center">4<span>0</span>4</h1>
