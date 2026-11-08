@@ -60,20 +60,32 @@ function renderModels(filter = "") {
     return;
   }
   const rows = list.map((m) => {
-    const caps = [];
-    if (m.vision) caps.push('<span class="tag ok">👁 Vision</span>');
-    if (!m.active) caps.push('<span class="tag off">nonaktif</span>');
-    if (!caps.length) caps.push('<span class="muted">teks</span>');
-    return `<tr>
+    // Kemampuan: hanya badge vision (status dipisah ke kolom sendiri di kanan)
+    const caps = m.vision
+      ? '<span class="tag ok">👁 Vision</span>'
+      : '<span class="muted">teks</span>';
+    // Status: kolom paling kanan sebelum tombol aksi
+    const status = m.active
+      ? '<span class="tag ok">● Aktif</span>'
+      : '<span class="tag off">○ Nonaktif</span>';
+    return `<tr${m.active ? "" : ' class="row-off"'}>
     <td class="mono">${esc(m.id)}</td>
     <td>${esc(m.vendor || "-")}</td>
-    <td>${caps.join(" ")}</td>
-    <td>${m.multiplier != null ? esc(m.multiplier) + "×" : "-"}</td>
-    <td><button class="btn small" data-model="${esc(m.id)}">Pakai</button></td>
+    <td>${caps}</td>
+    <td class="num">${m.multiplier != null ? esc(m.multiplier) + "×" : "-"}</td>
+    <td>${status}</td>
+    <td class="col-action"><button class="btn small" data-model="${esc(m.id)}">Pakai</button></td>
   </tr>`;
   }).join("");
-  $("models-wrap").innerHTML = `<div class="table-scroll"><table>
-    <thead><tr><th>Model ID</th><th>Vendor</th><th>Kemampuan</th><th>Multiplier</th><th></th></tr></thead>
+  $("models-wrap").innerHTML = `<div class="table-scroll"><table class="models-table">
+    <thead><tr>
+      <th>Model ID</th>
+      <th>Vendor</th>
+      <th>Kemampuan</th>
+      <th class="num">Multiplier</th>
+      <th class="col-status">Status</th>
+      <th class="col-action"></th>
+    </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }

@@ -529,6 +529,21 @@ td { vertical-align: middle; }
 .tag.off { background: rgba(255, 92, 110, .14); color: #ff9caa; border-color: rgba(255, 92, 110, .3); }
 
 /* ==============================================================
+   TABEL MODEL (halaman /docs)
+   ============================================================== */
+.models-table td { vertical-align: middle; }
+/* Angka (multiplier) rata kanan agar digit sejajar rapi */
+.models-table th.num, .models-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Status & aksi dipatok di kanan supaya kolomnya lurus sejajar */
+.models-table th.col-status, .models-table td:nth-child(5) { text-align: right; }
+.models-table th.col-action, .models-table td.col-action { text-align: right; }
+/* Baris model nonaktif diredupkan agar mata langsung fokus ke yang aktif */
+.models-table tr.row-off td { opacity: .55; }
+.models-table tr.row-off:hover td { opacity: 1; }
+/* Jarak antar badge bila lebih dari satu */
+.models-table td .tag + .tag { margin-left: var(--s-1); }
+
+/* ==============================================================
    ALERT
    ============================================================== */
 .alert {
