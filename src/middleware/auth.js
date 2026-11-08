@@ -1,5 +1,5 @@
 /**
- * auth.js — Middleware otentikasi Sub-API Key + validasi kuota.
+ * auth.js — Middleware otentikasi API Key + validasi kuota.
  *
  * Urutan pemeriksaan (sesuai spesifikasi):
  *   1. 401 → header Authorization hilang / format salah / key tidak ditemukan
@@ -35,7 +35,7 @@ function authenticateSubKey(req, res, next) {
   if (!row) {
     return res.status(401).json({
       error: {
-        message: "Sub-API Key tidak ditemukan atau tidak valid.",
+        message: "API Key tidak ditemukan atau tidak valid.",
         type: "invalid_request_error",
         code: "invalid_api_key",
       },
@@ -45,7 +45,7 @@ function authenticateSubKey(req, res, next) {
   if (!row.is_active) {
     return res.status(403).json({
       error: {
-        message: "Sub-API Key Anda sedang dinonaktifkan. Silakan hubungi admin.",
+        message: "API Key Anda sedang dinonaktifkan. Silakan hubungi admin.",
         type: "insufficient_quota",
         code: "key_disabled",
       },

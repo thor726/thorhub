@@ -117,6 +117,57 @@ function isiIntegrasi(d) {
   $("mykey").dataset.full = key;
   $("vs-base").textContent = base + "/v1";
   $("lain-base").textContent = base + "/v1";
+  const curBase = $("cur-base");
+  if (curBase) curBase.textContent = base + "/v1";
+
+  // Logo aplikasi: isi tiap kartu + judul seksi (butuh app-logos.js)
+  if (window.svgLogoApp) {
+    document.querySelectorAll("[data-logo]").forEach((el) => {
+      el.innerHTML = window.svgLogoApp(el.dataset.logo, 22);
+    });
+    const hub = $("hub-logo");
+    if (hub) hub.innerHTML = window.svgLogoApp("claude", 26) + window.svgLogoApp("vscode", 26);
+  }
+
+  // Pemilih OS hanya relevan untuk Claude Code (tab Integrasi kini tab pertama)
+  const osAktif = document.querySelector(".app.active")?.dataset.app || "claude";
+  const osPick = $("os-pick");
+  if (osPick) osPick.classList.toggle("hidden", osAktif !== "claude");
+  terapkanOS();
+
+  // SDK OpenAI — perintah siap pakai
+  const sdkPy = $("cmd-sdk-py");
+  if (sdkPy) {
+    sdkPy.textContent =
+`from openai import OpenAI
+
+client = OpenAI(
+    api_key="${key}",
+    base_url="${base}/v1",
+)
+
+resp = client.chat.completions.create(
+    model="deepseek-v4-pro",
+    messages=[{"role": "user", "content": "Halo"}],
+)
+print(resp.choices[0].message.content)`;
+  }
+  const sdkJs = $("cmd-sdk-js");
+  if (sdkJs) {
+    sdkJs.textContent =
+`import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: "${key}",
+  baseURL: "${base}/v1",
+});
+
+const resp = await client.chat.completions.create({
+  model: "deepseek-v4-pro",
+  messages: [{ role: "user", content: "Halo" }],
+});
+console.log(resp.choices[0].message.content);`;
+  }
 
   // 1) Claude Code — perintah satu baris (Linux/macOS)
   const elClaude = $("cmd-claude");

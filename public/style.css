@@ -105,8 +105,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   background-color: var(--bg);
+  /* Cahaya lime dari atas. Sengaja TANPA background-attachment: fixed —
+     properti itu diabaikan iOS Safari & bikin latar terlihat terpotong.
+     Aurora (SVG fixed, z-index -1) sudah menangani efek kedalaman. */
   background-image: radial-gradient(ellipse 80% 45% at 50% 0%, rgba(163, 230, 53, .055), transparent 70%);
-  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: 100% 70vh;
 }
 
 body::before {
@@ -119,8 +124,18 @@ body::before {
     linear-gradient(rgba(255, 255, 255, .016) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, .016) 1px, transparent 1px);
   background-size: 40px 40px;
-  mask-image: radial-gradient(ellipse 85% 60% at 50% 0%, #000 25%, transparent 78%);
-  -webkit-mask-image: radial-gradient(ellipse 85% 60% at 50% 0%, #000 25%, transparent 78%);
+  /* Di PC pendar diletakkan di atas-tengah; di layar sempit pendar memanjang
+     ke bawah (ellipse lebih tinggi) supaya grid tetap terlihat sepanjang halaman. */
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 0%, #000 30%, transparent 82%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 0%, #000 30%, transparent 82%);
+}
+@media (max-width: 640px) {
+  /* Grid lebih halus di layar kecil — kepadatan 40px terasa ramai di HP */
+  body::before {
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 120% 85% at 50% 0%, #000 35%, transparent 85%);
+    -webkit-mask-image: radial-gradient(ellipse 120% 85% at 50% 0%, #000 35%, transparent 85%);
+  }
 }
 
 img, svg, video, table, pre { max-width: 100%; }
@@ -1007,15 +1022,22 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 .app:hover { border-color: var(--border-2); background: var(--card-hov); }
 .app.active { border-color: var(--lime-line); background: var(--lime-bg); }
 .app-ico {
-  width: 34px; height: 34px; flex-shrink: 0;
+  width: 38px; height: 38px; flex-shrink: 0;
   display: grid; place-items: center;
   background: var(--input-dk);
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
   font-family: var(--mono); font-size: 12px; font-weight: 700;
   color: var(--muted);
+  transition: border-color var(--t) ease, background var(--t) ease;
 }
-.app.active .app-ico { color: var(--lime); border-color: var(--lime-line); }
+.app-ico svg { display: block; }
+.app.active .app-ico { border-color: var(--lime-line); background: rgba(163, 230, 53, .08); }
+.app:hover .app-ico { border-color: var(--line-2); }
+
+/* Logo kecil di samping judul "Hubungkan Aplikasi Kamu" */
+.hub-logo { display: inline-flex; align-items: center; gap: 4px; margin-right: var(--s-2); }
+.hub-logo svg { display: block; }
 .app-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .app-tx b { font-size: 14px; font-weight: 600; color: var(--text); }
 .app-tx small { font-size: 11.5px; color: var(--muted); }
@@ -1085,6 +1107,47 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 .gl span { font-size: 12.5px; color: var(--text-body); }
 
 /* ==============================================================
+   MODAL (panel admin)
+   ============================================================== */
+.modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: var(--s-4);
+  background: rgba(0, 0, 0, .7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn var(--t) ease both;
+}
+.modal {
+  width: 100%;
+  max-width: 720px;
+  max-height: 86vh;
+  max-height: 86dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--card);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: var(--s-5);
+  box-shadow: var(--shadow-lift);
+  animation: scaleIn .2s var(--ease) both;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+.modal-head h2 { margin: 0; font-size: 16px; }
+@media (max-width: 640px) {
+  .modal { padding: var(--s-4); max-height: 90dvh; }
+}
+
+/* ==============================================================
    HALAMAN 404
    ============================================================== */
 .notfound-logo { animation: scaleIn .4s var(--ease) both; }
@@ -1118,18 +1181,35 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   --aurora-pulse-duration: 14s;
   --aurora-pulse-low: .10;
   --aurora-pulse-high: .18;
-  --aurora-mask: linear-gradient(180deg, #000 55%, transparent 98%);
+  --aurora-mask: linear-gradient(180deg, #000 58%, transparent 99%);
   -webkit-mask-image: var(--aurora-mask);
   mask-image: var(--aurora-mask);
   position: fixed;
   display: block;
+  /* Ruang ekstra 40px tiap sisi agar gerakan drift tak memperlihatkan tepi kosong */
   inset: -40px;
   width: calc(100% + 80px);
-  height: calc(100% + 80px);
+  /* 100dvh: akurat saat address bar mobile muncul/hilang (100vh meleset) */
+  height: calc(100vh + 80px);
+  height: calc(100dvh + 80px);
   z-index: -1;
   pointer-events: none;
   filter: opacity(var(--aurora-strength));
   animation: cc-aurora-drift var(--aurora-drift-duration) ease-in-out infinite;
+}
+/* Layar sempit & tinggi (portrait): pendar diturunkan sedikit agar tidak
+   terlalu penuh, dan aurora dipertegas supaya tetap terasa di bawah lipatan */
+@media (max-width: 640px) {
+  .cc-aurora-svg {
+    --aurora-halo-opacity: .16;
+    --aurora-sharp-opacity: .30;
+    --aurora-strength: .85;
+    --aurora-mask: linear-gradient(180deg, #000 42%, transparent 92%);
+  }
+}
+/* Layar sangat lebar: batasi tinggi pendar agar tidak "menggantung" di PC besar */
+@media (min-width: 1600px) {
+  .cc-aurora-svg { --aurora-strength: .9; }
 }
 .cc-aurora-halo { opacity: var(--aurora-halo-opacity); animation: cc-aurora-pulse var(--aurora-pulse-duration) ease-in-out infinite; }
 .cc-aurora-sharp { opacity: var(--aurora-sharp-opacity); }

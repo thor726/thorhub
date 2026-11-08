@@ -189,7 +189,7 @@ router.post("/admin/keys", requireAdminSession, (req, res) => {
 // PATCH /portal/admin/keys/:apiKey — ubah is_active dan/atau token_limit
 router.patch("/admin/keys/:apiKey", requireAdminSession, (req, res) => {
   const key = db.prepare("SELECT * FROM api_keys WHERE api_key = ?").get(req.params.apiKey);
-  if (!key) return res.status(404).json({ error: { message: "Sub-API Key tidak ditemukan.", code: "not_found" } });
+  if (!key) return res.status(404).json({ error: { message: "API Key tidak ditemukan.", code: "not_found" } });
 
   const { is_active, token_limit } = req.body || {};
   if (typeof is_active === "undefined" && typeof token_limit === "undefined") {
@@ -208,11 +208,109 @@ router.patch("/admin/keys/:apiKey", requireAdminSession, (req, res) => {
   res.json({ data: decorate(updated) });
 });
 
-// DELETE /portal/admin/keys/:apiKey — hapus permanen
+// DELETE /portal/admin/keys/:apiKey — hapus permanen (beserta log pemakaiannya)
 router.delete("/admin/keys/:apiKey", requireAdminSession, (req, res) => {
-  const info = db.prepare("DELETE FROM api_keys WHERE api_key = ?").run(req.params.apiKey);
-  if (info.changes === 0) return res.status(404).json({ error: { message: "Sub-API Key tidak ditemukan.", code: "not_found" } });
-  res.json({ data: { deleted: true, api_key: req.params.apiKey } });
+  const key = db.prepare("SELECT id FROM api_keys WHERE api_key = ?").get(req.params.apiKey);
+  if (!key) return res.status(404).json({ error: { message: "API Key tidak ditemukan.", code: "not_found" } });
+
+  // Bersihkan log agar tidak menyisakan baris yatim (dijalankan dalam transaksi)
+  const hapus = db.transaction((id) => {
+    const log = db.prepare("DELETE FROM usage_logs WHERE api_key_id = ?").run(id);
+    const kunci = db.prepare("DELETE FROM api_keys WHERE id = ?").run(id);
+    return { logs: log.changes, keys: kunci.changes };
+  });
+  const hasil = hapus(key.id);
+
+  res.json({ data: { deleted: true, api_key: req.params.apiKey, logs_removed: hasil.logs } });
+});
+
+// POST /portal/admin/keys/:apiKey/reset — nol-kan pemakaian token (log tetap)
+router.post("/admin/keys/:apiKey/reset", requireAdminSession, (req, res) => {
+  const key = db.prepare("SELECT * FROM api_keys WHERE api_key = ?").get(req.params.apiKey);
+  if (!key) return res.status(404).json({ error: { message: "API Key tidak ditemukan.", code: "not_found" } });
+
+  const bersihLog = req.body && req.body.hapus_log === true;
+  db.prepare("UPDATE api_keys SET tokens_used = 0 WHERE id = ?").run(key.id);
+  if (bersihLog) db.prepare("DELETE FROM usage_logs WHERE api_key_id = ?").run(key.id);
+
+  const updated = db.prepare(`SELECT ${LIST_COLS} FROM api_keys WHERE id = ?`).get(key.id);
+  res.json({ data: { ...decorate(updated), logs_dihapus: bersihLog } });
+});
+
+// GET /portal/admin/keys/:apiKey/usage — rincian pemakaian satu key (per model)
+router.get("/admin/keys/:apiKey/usage", requireAdminSession, (req, res) => {
+  const key = db.prepare("SELECT * FROM api_keys WHERE api_key = ?").get(req.params.apiKey);
+  if (!key) return res.status(404).json({ error: { message: "API Key tidak ditemukan.", code: "not_found" } });
+
+  const byModel = db
+    .prepare(
+      `SELECT model, COUNT(*) AS requests,
+              COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+              COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+              COALESCE(SUM(total_tokens), 0) AS total_tokens
+       FROM usage_logs WHERE api_key_id = ?
+       GROUP BY model ORDER BY total_tokens DESC LIMIT 20`
+    )
+    .all(key.id)
+    .map((r) => ({ ...r, model: r.model || "(tidak diketahui)" }));
+
+  const byDay = db
+    .prepare(
+      `SELECT substr(created_at,1,10) AS tanggal, COUNT(*) AS requests,
+              COALESCE(SUM(total_tokens),0) AS total_tokens
+       FROM usage_logs WHERE api_key_id = ? AND created_at >= date('now','-29 days')
+       GROUP BY tanggal ORDER BY tanggal`
+    )
+    .all(key.id);
+
+  const logs = db
+    .prepare(
+      `SELECT model, prompt_tokens, completion_tokens, total_tokens, status, created_at
+       FROM usage_logs WHERE api_key_id = ? ORDER BY id DESC LIMIT 50`
+    )
+    .all(key.id)
+    .map((l) => ({ ...l, model: l.model || "(tidak diketahui)" }));
+
+  res.json({ data: { key: decorate(key), by_model: byModel, by_day: byDay, logs } });
+});
+
+// GET /portal/admin/activity — log aktivitas seluruh member (50 terbaru)
+router.get("/admin/activity", requireAdminSession, (req, res) => {
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  const rows = db
+    .prepare(
+      `SELECT l.id, l.model, l.prompt_tokens, l.completion_tokens, l.total_tokens,
+              l.status, l.created_at, k.user_name, k.api_key
+       FROM usage_logs l
+       LEFT JOIN api_keys k ON k.id = l.api_key_id
+       ORDER BY l.id DESC LIMIT ?`
+    )
+    .all(limit);
+  res.json({
+    data: rows.map((r) => ({
+      ...r,
+      user_name: r.user_name || "(key dihapus)",
+      api_key: r.api_key ? r.api_key.slice(0, 18) + "…" : "—",
+      model: r.model || "(tidak diketahui)",
+    })),
+  });
+});
+
+// GET /portal/admin/models — katalog model + jumlah pemakaian (untuk admin)
+router.get("/admin/models", requireAdminSession, (_req, res) => {
+  const pakai = db
+    .prepare(
+      `SELECT model, COUNT(*) AS requests, COALESCE(SUM(total_tokens),0) AS total_tokens
+       FROM usage_logs GROUP BY model`
+    )
+    .all();
+  const peta = new Map(pakai.map((r) => [r.model, r]));
+  res.json({
+    data: models.MODELS.map((m) => {
+      const p = peta.get(m.id) || { requests: 0, total_tokens: 0 };
+      return { id: m.id, vendor: m.vendor, multiplier: m.multiplier, vision: !!m.vision, enabled: m.enabled !== false, ...p };
+    }),
+  });
 });
 
 // ---------------------------------------------------------------

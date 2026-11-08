@@ -1,9 +1,9 @@
 /**
- * admin.js — REST API manajemen Sub-API Key (khusus admin/penjual).
+ * admin.js — REST API manajemen API Key (khusus admin/penjual).
  *
  * Dilindungi ADMIN_API_KEY (bandingkan timing-safe lewat hash SHA-256).
  *
- *  GET    /admin/keys            → daftar semua sub-key
+ *  GET    /admin/keys            → daftar semua API key
  *  GET    /admin/keys/:apiKey    → detail satu key + sisa kuota
  *  PATCH  /admin/keys/:apiKey    → ubah is_active (blokir/unblokir)
  *                                  atau token_limit (top-up/ubah limit)
@@ -53,14 +53,14 @@ router.get("/keys", requireAdmin, (_req, res) => {
 // GET /admin/keys/:apiKey — detail satu key
 router.get("/keys/:apiKey", requireAdmin, (req, res) => {
   const row = db.prepare(`SELECT ${LIST_COLS} FROM api_keys WHERE api_key = ?`).get(req.params.apiKey);
-  if (!row) return res.status(404).json({ error: { message: "Sub-API Key tidak ditemukan." } });
+  if (!row) return res.status(404).json({ error: { message: "API Key tidak ditemukan." } });
   res.json({ data: decorate(row) });
 });
 
 // PATCH /admin/keys/:apiKey — ubah status aktif dan/atau limit token
 router.patch("/keys/:apiKey", requireAdmin, (req, res) => {
   const key = db.prepare("SELECT * FROM api_keys WHERE api_key = ?").get(req.params.apiKey);
-  if (!key) return res.status(404).json({ error: { message: "Sub-API Key tidak ditemukan." } });
+  if (!key) return res.status(404).json({ error: { message: "API Key tidak ditemukan." } });
 
   const { is_active, token_limit } = req.body || {};
   if (typeof is_active === "undefined" && typeof token_limit === "undefined") {
@@ -89,7 +89,7 @@ router.patch("/keys/:apiKey", requireAdmin, (req, res) => {
 // DELETE /admin/keys/:apiKey — hapus key permanen
 router.delete("/keys/:apiKey", requireAdmin, (req, res) => {
   const info = db.prepare("DELETE FROM api_keys WHERE api_key = ?").run(req.params.apiKey);
-  if (info.changes === 0) return res.status(404).json({ error: { message: "Sub-API Key tidak ditemukan." } });
+  if (info.changes === 0) return res.status(404).json({ error: { message: "API Key tidak ditemukan." } });
   res.json({ data: { deleted: true, api_key: req.params.apiKey } });
 });
 

@@ -98,11 +98,11 @@
           <span>Dashboard <span class="grad">Member</span></span>
         </h1>
         <span class="eyebrow">thorhub · akses member</span>
-        <p class="sub">Masuk dengan Sub-API Key Anda untuk memantau token yang terpakai.</p>
+        <p class="sub">Masuk dengan API Key Anda untuk memantau token yang terpakai.</p>
         <form id="form-login">
           <label for="apikey">
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 1-7.1 7.1 5 5 0 0 1 7.1-7.1zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3"/></svg>
-            Sub-API Key
+            API Key
           </label>
           <input id="apikey" type="password" class="mono" placeholder="sk-thor-..." autocomplete="off" required />
           <div class="row-actions">
@@ -148,7 +148,11 @@
 
       <!-- TAB -->
       <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="pemakaian" role="tab">
+        <button class="tab active" data-tab="integrasi" role="tab">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
+          Integrasi API
+        </button>
+        <button class="tab" data-tab="pemakaian" role="tab">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
           Pemakaian
         </button>
@@ -160,14 +164,10 @@
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
           Log Aktivitas
         </button>
-        <button class="tab" data-tab="integrasi" role="tab">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
-          Integrasi API
-        </button>
       </div>
 
       <!-- TAB: Pemakaian -->
-      <div class="tab-panel active" id="tab-pemakaian">
+      <div class="tab-panel" id="tab-pemakaian">
         <div class="card">
           <h2>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
@@ -236,7 +236,7 @@
       </div>
 
       <!-- TAB: Integrasi API -->
-      <div class="tab-panel" id="tab-integrasi">
+      <div class="tab-panel active" id="tab-integrasi">
 
         <!-- Kredensial (dipindah ke halaman ini) -->
         <div class="card">
@@ -268,28 +268,36 @@
         <!-- Hubungkan aplikasi -->
         <div class="card">
           <h2>
-            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
+            <span class="hub-logo" id="hub-logo" aria-hidden="true"></span>
             Hubungkan Aplikasi Kamu
           </h2>
           <p class="muted" style="margin-top:0;font-size:13px">Pilih aplikasi, lalu ikuti langkahnya. Base URL &amp; API Key sudah otomatis terisi.</p>
 
-          <!-- Kartu aplikasi -->
+          <!-- Kartu aplikasi (logo brand diisi oleh app-logos.js) -->
           <div class="apps">
             <button class="app active" data-app="claude">
-              <span class="app-ico">CL</span>
+              <span class="app-ico" data-logo="claude"></span>
               <span class="app-tx"><b>Claude Code</b><small>Asisten AI koding di terminal</small></span>
             </button>
             <button class="app" data-app="opencode">
-              <span class="app-ico">OC</span>
+              <span class="app-ico" data-logo="opencode"></span>
               <span class="app-tx"><b>OpenCode</b><small>Asisten koding open-source</small></span>
             </button>
             <button class="app" data-app="vscode">
-              <span class="app-ico">VS</span>
+              <span class="app-ico" data-logo="vscode"></span>
               <span class="app-tx"><b>VS Code</b><small>Cline, Continue, Roo Code</small></span>
             </button>
+            <button class="app" data-app="cursor">
+              <span class="app-ico" data-logo="cursor"></span>
+              <span class="app-tx"><b>Cursor</b><small>Editor AI berbasis VS Code</small></span>
+            </button>
+            <button class="app" data-app="openai">
+              <span class="app-ico" data-logo="openai"></span>
+              <span class="app-tx"><b>SDK OpenAI</b><small>Python, Node.js, Go, dsb.</small></span>
+            </button>
             <button class="app" data-app="lain">
-              <span class="app-ico">7R</span>
-              <span class="app-tx"><b>Aplikasi lain</b><small>Cursor, ChatGPT desktop, dsb.</small></span>
+              <span class="app-ico" data-logo="lain"></span>
+              <span class="app-tx"><b>Aplikasi lain</b><small>ChatGPT desktop, LibreChat, dsb.</small></span>
             </button>
           </div>
 
@@ -364,6 +372,48 @@
             </ol>
           </div>
 
+          <!-- Panel: Cursor -->
+          <div class="app-panel" id="app-cursor">
+            <ol class="steps">
+              <li>
+                <b>Install Cursor</b><br />
+                <small class="muted">Unduh dari <code>cursor.com</code>, lalu buka <b>Settings → Models</b>.</small>
+              </li>
+              <li>
+                <b>Tambahkan provider OpenAI-compatible</b>
+                <div class="table-scroll">
+                  <table>
+                    <tbody>
+                      <tr><td><b>Base URL</b></td><td class="mono" id="cur-base">…</td></tr>
+                      <tr><td><b>API Key</b></td><td class="mono">(tempel API Key Anda)</td></tr>
+                      <tr><td><b>Model</b></td><td class="mono">deepseek-v4-pro</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </li>
+              <li><b>Simpan</b> lalu pilih model ThorHub di daftar model Cursor.</li>
+            </ol>
+          </div>
+
+          <!-- Panel: SDK OpenAI -->
+          <div class="app-panel" id="app-openai">
+            <ol class="steps">
+              <li>
+                <b>Install SDK</b>
+                <div class="cmd"><pre id="cmd-sdk-install">pip install openai</pre><button class="btn small" data-copy="#cmd-sdk-install">Salin</button></div>
+              </li>
+              <li>
+                <b>Arahkan ke ThorHub</b><br />
+                <small class="muted">Cukup ganti <code>base_url</code> &amp; <code>api_key</code> — sisa kodenya tidak berubah.</small>
+                <div class="cmd"><pre id="cmd-sdk-py">…</pre><button class="btn small" data-copy="#cmd-sdk-py">Salin</button></div>
+              </li>
+              <li>
+                <b>Contoh Node.js</b>
+                <div class="cmd"><pre id="cmd-sdk-js">…</pre><button class="btn small" data-copy="#cmd-sdk-js">Salin</button></div>
+              </li>
+            </ol>
+          </div>
+
           <!-- Panel: aplikasi lain -->
           <div class="app-panel" id="app-lain">
             <ol class="steps">
@@ -415,6 +465,7 @@
   </main>
 
   <script defer src="/nav.js"></script>
+  <script src="/app-logos.js"></script>
   <script src="/portal.js"></script>
 </body>
 </html>

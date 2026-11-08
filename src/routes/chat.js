@@ -1,6 +1,6 @@
 /**
  * chat.js — Route /v1/* yang diakses pembeli.
- * Semua request wajib lolos otentikasi Sub-API Key + cek kuota.
+ * Semua request wajib lolos otentikasi API Key + cek kuota.
  */
 const express = require("express");
 const config = require("../config");

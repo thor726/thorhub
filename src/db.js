@@ -1,5 +1,5 @@
 /**
- * db.js — Koneksi SQLite (better-sqlite3) + skema tabel Sub-API Key.
+ * db.js — Koneksi SQLite (better-sqlite3) + skema tabel API Key.
  *
  * Dipakai bersama oleh server (src/server.js) dan CLI (generate-key.js /
  * manage-keys.js). Mode WAL membuat akses multi-proses tetap aman & cepat.
@@ -32,7 +32,7 @@ db.exec(`
     token       TEXT    PRIMARY KEY,
     role        TEXT    NOT NULL,               -- 'admin' | 'member'
     user_name   TEXT,                           -- untuk member (nama pembeli)
-    api_key     TEXT,                           -- untuk member (sub-key miliknya)
+    api_key     TEXT,                           -- untuk member (API key miliknya)
     created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now')),
     expires_at  INTEGER NOT NULL                -- epoch ms
   );
