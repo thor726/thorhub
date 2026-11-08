@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#080b13" />
-  <meta name="description" content="ThorHub — Satu API untuk semua model AI. Gateway LLM dengan sub-API key, kuota token, dan rate limit." />
-  <title>ThorHub — Satu API, Semua Model AI</title>
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="description" content="ThorHub — provider utama penyedia token AI. Satu API OpenAI-compatible untuk belasan model premium, harga transparan, kuota terukur per key." />
+  <title>ThorHub — Provider Utama Penyedia Token AI</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/logo.svg" />
   <link rel="stylesheet" href="/style.css" />
@@ -13,7 +13,7 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/">
-      <img class="logo" src="/logo.svg" alt="" width="30" height="30" />
+      <img class="logo" src="/logo.svg" alt="" width="28" height="28" />
       <span class="txt">Thor<em>Hub</em></span>
     </a>
     <button class="nav-toggle" aria-label="Buka menu" aria-expanded="false" aria-controls="main-nav">
@@ -37,28 +37,89 @@
   </header>
 
   <main class="wrap">
-    <h1>
-      <svg class="ico" style="width:34px;height:34px;color:var(--bolt)" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>
-      <span><span class="grad">ThorHub</span> — Satu API, Semua Model AI</span>
-    </h1>
-    <p class="sub">Gateway LLM dengan sub-API key, kuota token, dan rate limit. Bangun produk AI Anda tanpa pusing urusan provider.</p>
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+      <div class="hero-grid">
+        <div>
+          <span class="hero-kicker">
+            <span class="dot" id="hero-dot"></span>
+            <span id="hero-status">menghubungi gateway…</span>
+          </span>
 
-    <!-- Status gateway: skeleton dulu, lalu diisi JS -->
-    <div class="grid stagger" id="status-grid">
-      <div class="stat">
-        <div class="k"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Status</div>
-        <div class="v" id="st-status"><span class="skeleton w-60" style="display:inline-block;height:22px;vertical-align:middle"></span></div>
+          <h1>
+            <span class="line">Satu API untuk</span>
+            <span class="line"><span class="hl">semua model AI.</span></span>
+          </h1>
+
+          <p class="hero-sub">
+            <b>ThorHub</b> adalah <b>provider utama penyedia token</b> — satu endpoint
+            OpenAI-compatible untuk seluruh katalog model premium, dengan kuota token,
+            rate limit, dan harga yang terukur per key.
+          </p>
+
+          <div class="row-actions" style="margin-top:0">
+            <a class="btn primary" href="/portal">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Masuk Portal Member
+            </a>
+            <a class="btn" href="/docs">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              Lihat Dokumentasi
+            </a>
+          </div>
+
+          <div class="chips" id="vendor-chips">
+            <!-- diisi JS dari daftar vendor nyata -->
+          </div>
+        </div>
+
+        <!-- Panel kanan: monitor langsung (data nyata dari /health & /portal/models) -->
+        <div class="live-box">
+          <div class="k"><span class="dot" id="live-dot"></span> model aktif</div>
+          <div class="v" id="live-models">--</div>
+          <div class="u" id="live-models-sub">memuat katalog…</div>
+        </div>
       </div>
-      <div class="stat">
-        <div class="k"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg> Antrean</div>
-        <div class="v" id="st-queue"><span class="skeleton w-40" style="display:inline-block;height:22px;vertical-align:middle"></span></div>
+
+      <!-- Strip statistik ringkas -->
+      <div class="stat-strip mt-4">
+        <div class="cell"><div class="k">Total Model</div><div class="v" id="st-total">—</div></div>
+        <div class="cell"><div class="k">Vendor</div><div class="v" id="st-vendors">—</div></div>
+        <div class="cell"><div class="k">Antrean</div><div class="v" id="st-queue">—</div></div>
+        <div class="cell"><div class="k">Latensi</div><div class="v lime" id="st-latency">—</div></div>
       </div>
-      <div class="stat">
-        <div class="k"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Berjalan</div>
-        <div class="v" id="st-running"><span class="skeleton w-60" style="display:inline-block;height:22px;vertical-align:middle"></span></div>
+    </section>
+
+    <!-- ============ FITUR BERNOMOR ============ -->
+    <div class="features-grid stagger">
+      <div class="feature">
+        <div class="no">// 01</div>
+        <h3>Drop-in OpenAI</h3>
+        <p>Arahkan <code>base_url</code> ke ThorHub dan SDK yang sudah Anda pakai langsung jalan. Streaming, tool calls, dan JSON mode diteruskan apa adanya.</p>
+      </div>
+      <div class="feature">
+        <div class="no">// 02</div>
+        <h3>Kuota per key</h3>
+        <p>Setiap member punya Sub-API Key dengan plafon token sendiri. Pantau pemakaian, blokir, atau top-up kapan saja.</p>
+      </div>
+      <div class="feature">
+        <div class="no">// 03</div>
+        <h3>Harga transparan</h3>
+        <p>Konsumsi dihitung auditable lewat multiplier per model — jumlah token yang terpotong dari kuota selalu bisa ditelusuri.</p>
+      </div>
+      <div class="feature">
+        <div class="no">// 04</div>
+        <h3>Antrean adil</h3>
+        <p>Rate limit dan antrean menjaga kualitas layanan saat trafik ramai, tanpa menolak permintaan yang masih wajar.</p>
+      </div>
+      <div class="feature">
+        <div class="no">// 05</div>
+        <h3>Tanpa lock-in</h3>
+        <p>Endpoint standar <code>/v1/chat/completions</code> dan <code>/v1/models</code>. Pindah provider cukup ganti satu URL.</p>
       </div>
     </div>
 
+    <!-- ============ ENDPOINT ============ -->
     <div class="card mt-4">
       <h2>
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
@@ -76,9 +137,10 @@
           </tbody>
         </table>
       </div>
-      <p class="muted mt-4">Autentikasi: header <code>Authorization: Bearer sk-thor-xxx</code></p>
+      <p class="muted mt-4" style="margin-bottom:0">Autentikasi: header <code>Authorization: Bearer sk-thor-xxx</code></p>
     </div>
 
+    <!-- ============ MULAI CEPAT ============ -->
     <div class="card">
       <h2>
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>
@@ -87,7 +149,7 @@
       <pre>curl http://127.0.0.1:3000/v1/chat/completions \
   -H "Authorization: Bearer sk-thor-XXX" \
   -H "Content-Type: application/json" \
-  -d '{"model":"auto","messages":[{"role":"user","content":"Halo"}]}'</pre>
+  -d '{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"Halo"}]}'</pre>
       <div class="row-actions">
         <a class="btn primary" href="/docs">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -103,23 +165,61 @@
 
   <script defer src="/nav.js"></script>
   <script>
-    /* loadStatus — HANYA mengubah isi teks; struktur & logika tetap sama. */
-    async function loadStatus() {
+    /* Beranda — semua angka berasal dari endpoint nyata (/health & /portal/models). */
+    const $ = (id) => document.getElementById(id);
+
+    async function loadHealth() {
+      const t0 = performance.now();
       try {
         const r = await fetch("/health");
         const d = await r.json();
+        const ms = Math.round(performance.now() - t0);
         const ok = d.status === "ok";
-        document.getElementById("st-status").innerHTML =
-          '<span class="dot' + (ok ? "" : " off") + '"></span> ' + (ok ? "Aktif" : "Gangguan");
-        document.getElementById("st-queue").textContent = d.queue?.queued ?? 0;
-        const running = d.queue?.running;
-        document.getElementById("st-running").textContent =
-          typeof running === "object" ? JSON.stringify(running) : (running ?? 0);
+        const dot = $("hero-dot");
+        dot.className = ok ? "dot" : "dot off";
+        $("hero-status").textContent = ok ? "gateway aktif" : "gangguan";
+        $("live-dot").className = ok ? "dot" : "dot off";
+        $("st-queue").textContent = d.queue?.queued ?? 0;
+        $("st-latency").textContent = ms + " ms";
       } catch {
-        document.getElementById("st-status").innerHTML = '<span class="dot off"></span> Offline';
+        $("hero-dot").className = "dot off";
+        $("hero-status").textContent = "gateway offline";
+        $("live-dot").className = "dot off";
+        $("st-queue").textContent = "—";
+        $("st-latency").textContent = "—";
       }
     }
-    loadStatus();
+
+    async function loadModels() {
+      try {
+        const r = await fetch("/portal/models?all=1");
+        const d = await r.json();
+        if (!r.ok) throw new Error();
+        const meta = d.meta || {};
+        const list = d.data || [];
+        const total = meta.total ?? list.length;
+        const active = meta.active ?? list.filter((m) => m.active).length;
+        const vendors = meta.vendors || [...new Set(list.map((m) => m.vendor).filter(Boolean))];
+
+        $("live-models").textContent = active;
+        $("live-models-sub").textContent = "dari " + total + " model terdaftar";
+        $("st-total").textContent = total;
+        $("st-vendors").textContent = vendors.length;
+
+        $("vendor-chips").innerHTML = vendors
+          .map((v) => '<span class="chip">' + String(v).toUpperCase() + "</span>")
+          .join("");
+      } catch {
+        $("live-models").textContent = "—";
+        $("live-models-sub").textContent = "katalog tidak tersedia";
+        $("st-total").textContent = "—";
+        $("st-vendors").textContent = "—";
+      }
+    }
+
+    loadHealth();
+    loadModels();
+    setInterval(loadHealth, 15000); // pantau status berkala
   </script>
 </body>
 </html>

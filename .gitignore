@@ -5,3 +5,6 @@ data/*.db-wal
 data/*.db-shm
 npm-debug.log*
 *.log
+
+# cadangan lokal tema
+.backup-tema-thor/

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#080b13" />
+  <meta name="theme-color" content="#0a0a0a" />
   <title>Dokumentasi API — ThorHub</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/style.css" />
@@ -37,10 +37,10 @@
 
   <main class="wrap">
     <h1>
-      <svg class="ico" style="width:30px;height:30px;color:var(--accent)" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <svg class="ico" style="width:30px;height:30px;color:var(--lime)" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       <span>Dokumentasi <span class="grad">API</span></span>
     </h1>
-    <p class="sub">ThorHub bersifat <b>OpenAI-compatible</b> — cukup ganti <code>base_url</code> dan masukkan Sub-API Key Anda.</p>
+    <p class="sub">ThorHub adalah <b>provider utama penyedia token</b> Anda. Bersifat <b>OpenAI-compatible</b> — cukup ganti <code>base_url</code> dan masukkan Sub-API Key.</p>
 
     <!-- Base URL (selalu terlihat) -->
     <div class="card">
@@ -190,13 +190,13 @@
           </table>
         </div>
         <div class="alert ok mt-4" style="margin-bottom:0">
-          💡 Bila aplikasi menolak URL berakhiran <code>/v1</code>, coba isi <b>tanpa</b> <code>/v1</code>
+          <b>Catatan:</b> Bila aplikasi menolak URL berakhiran <code>/v1</code>, coba isi <b>tanpa</b> <code>/v1</code>
           (beberapa versi menambahkan sendiri), lalu jalankan tes koneksi.
         </div>
       </div>
 
       <div class="card">
-        <h2>🖥️ VS Code — Extension Cline / Roo Code / Continue</h2>
+        <h2>VS Code — Extension Cline / Roo Code / Continue</h2>
         <p class="muted">
           Extension coding AI di VS Code. Semuanya mendukung provider OpenAI-compatible:
         </p>
@@ -214,7 +214,7 @@
       </div>
 
       <div class="card">
-        <h2>⌨️ VS Code — Terminal Terintegrasi</h2>
+        <h2>VS Code — Terminal Terintegrasi</h2>
         <p class="muted">
           Buka terminal di VS Code dengan <kbd>Ctrl</kbd>+<kbd>`</kbd> (backtick), lalu jalankan
           perintah cURL dari tab <b>Mulai Cepat</b>. Ini cara tercepat mengetes koneksi tanpa extension.
@@ -224,7 +224,7 @@
       </div>
 
       <div class="card">
-        <h2>🌐 Open WebUI</h2>
+        <h2>Open WebUI</h2>
         <ol class="steps">
           <li>Masuk sebagai admin → <b>Settings → Connections</b></li>
           <li>Klik <b>+</b> (Add OpenAI API Connection)</li>
@@ -235,7 +235,7 @@
       </div>
 
       <div class="card">
-        <h2>💬 ChatBox / NextChat / Jan / LobeChat</h2>
+        <h2>ChatBox / NextChat / Jan / LobeChat</h2>
         <p class="muted">Aplikasi chat desktop/mobile. Pengaturannya sama:</p>
         <ol class="steps">
           <li><b>Settings → Model Provider</b> → pilih <b>OpenAI</b> atau <b>Custom</b></li>
@@ -246,7 +246,7 @@
       </div>
 
       <div class="card">
-        <h2>🤖 Hermes / Agent Framework</h2>
+        <h2>Hermes / Agent Framework</h2>
         <p class="muted">
           Untuk framework agent yang memakai konfigurasi OpenAI-compatible (env var atau config file):
         </p>
@@ -255,14 +255,14 @@
       </div>
 
       <div class="card">
-        <h2>🐧 Terminal Linux / macOS — Variabel Lingkungan</h2>
+        <h2>Terminal Linux / macOS — Variabel Lingkungan</h2>
         <p class="muted">Set sekali, dipakai oleh banyak tools yang membaca <code>OPENAI_*</code>:</p>
         <pre id="ex-env">…</pre>
         <button class="btn small" data-copy="ex-env">Salin</button>
       </div>
 
       <div class="card">
-        <h2>🪟 Windows (CMD / PowerShell) — Variabel Lingkungan</h2>
+        <h2>Windows (CMD / PowerShell) — Variabel Lingkungan</h2>
         <pre id="ex-env-win">…</pre>
         <button class="btn small" data-copy="ex-env-win">Salin</button>
       </div>

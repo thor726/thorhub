@@ -36,11 +36,11 @@ async function boot() {
 
   // Peringatan status
   if (!d.is_active) {
-    $("status-warn").innerHTML = `<div class="alert err">⛔ Key Anda sedang dinonaktifkan. Akses chat diblokir. Hubungi admin.</div>`;
+    $("status-warn").innerHTML = `<div class="alert err">Key Anda sedang dinonaktifkan. Akses chat diblokir. Hubungi admin.</div>`;
   } else if (d.tokens_remaining <= 0) {
-    $("status-warn").innerHTML = `<div class="alert err">⚠️ Kuota token Anda habis. Silakan top-up agar bisa memakai API kembali.</div>`;
+    $("status-warn").innerHTML = `<div class="alert err">Kuota token Anda habis. Silakan top-up agar bisa memakai API kembali.</div>`;
   } else if (pct >= 80) {
-    $("status-warn").innerHTML = `<div class="alert err">⚠️ Kuota terpakai ${pct}%. Segera top-up sebelum habis.</div>`;
+    $("status-warn").innerHTML = `<div class="alert err">Kuota terpakai ${pct}%. Segera top-up sebelum habis.</div>`;
   }
 
   $("cards").innerHTML = `
@@ -48,7 +48,7 @@ async function boot() {
     <div class="stat"><div class="k">Terpakai</div><div class="v">${num(d.tokens_used)}</div></div>
     <div class="stat"><div class="k">Total Limit</div><div class="v">${num(d.token_limit)}</div></div>
     <div class="stat"><div class="k">Pemakaian</div><div class="v">${pct}%</div></div>
-    <div class="stat"><div class="k">Status</div><div class="v" style="font-size:18px">${d.is_active ? "✅ Aktif" : "⛔ Nonaktif"}</div></div>
+    <div class="stat"><div class="k">Status</div><div class="v" style="font-size:18px"><span class="dot${d.is_active ? "" : " off"}"></span> ${d.is_active ? "Aktif" : "Nonaktif"}</div></div>
     <div class="stat"><div class="k">Terdaftar</div><div class="v" style="font-size:15px">${esc(d.created_at)}</div></div>`;
 
   // Key + contoh

@@ -294,17 +294,17 @@ function renderModels(filter = "") {
   const rows = list.map((m) => {
     // Kemampuan: hanya badge vision (status dipisah ke kolom sendiri di kanan)
     const caps = m.vision
-      ? '<span class="tag ok">👁 Vision</span>'
-      : '<span class="muted">teks</span>';
+      ? '<span class="tag ok">vision</span>'
+      : '<span class="tag plain">teks</span>';
     // Status: kolom di kanan sebelum tombol aksi
     const status = m.active
-      ? '<span class="tag ok">● Aktif</span>'
-      : '<span class="tag off">○ Nonaktif</span>';
+      ? '<span class="tag ok">aktif</span>'
+      : '<span class="tag off">nonaktif</span>';
     return `<tr${m.active ? "" : ' class="row-off"'}>
     <td class="mono">${esc(m.id)}</td>
     <td>${esc(m.vendor || "-")}</td>
     <td>${caps}</td>
-    <td class="num">${m.multiplier != null ? esc(m.multiplier) + "×" : "-"}</td>
+    <td class="num${m.active ? " on" : ""}">${m.multiplier != null ? esc(m.multiplier) + "×" : "-"}</td>
     <td>${status}</td>
     <td class="col-action"><button class="btn small" data-model="${esc(m.id)}">Pakai</button></td>
   </tr>`;

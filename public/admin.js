@@ -84,7 +84,7 @@ async function loadGateway() {
   if (!loggedIn) return;
   const running = h.queue?.running;
   $("gw-status").innerHTML = `
-    <div class="stat"><div class="k">Status</div><div class="v" style="font-size:18px">${h.status === "ok" ? "✅ Aktif" : "⚠️ Gangguan"}</div></div>
+    <div class="stat"><div class="k">Status</div><div class="v" style="font-size:18px"><span class="dot${h.status === "ok" ? "" : " off"}"></span> ${h.status === "ok" ? "Aktif" : "Gangguan"}</div></div>
     <div class="stat"><div class="k">Antrean</div><div class="v">${num(h.queue?.queued ?? 0)}</div></div>
     <div class="stat"><div class="k">Berjalan</div><div class="v" style="font-size:16px">${esc(typeof running === "object" ? JSON.stringify(running) : running ?? 0)}</div></div>`;
 }
@@ -212,7 +212,7 @@ $("form-create").addEventListener("submit", async (e) => {
     });
     $("create-result").innerHTML = `
       <div class="alert ok">
-        ✅ Key diterbitkan untuk <b>${esc(k.user_name)}</b>. Simpan sekarang (tidak ditampilkan lagi):
+        Key diterbitkan untuk <b>${esc(k.user_name)}</b>. Simpan sekarang (tidak ditampilkan lagi):
         <div class="mono" style="margin-top:8px;word-break:break-all;user-select:all">${esc(k.api_key)}</div>
         <button class="btn small" id="copy-new" style="margin-top:8px">Salin</button>
       </div>`;
