@@ -148,7 +148,11 @@ input[type="checkbox"], input[type="radio"], [role="tab"] { cursor: pointer; }
 @keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scaleIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
-@keyframes shimmer { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
+/* OPTIMASI: dahulu shimmer menggerakkan `background-position`, yang memaksa
+   browser merasterisasi ulang gradient tiap frame (repaint penuh). Sekarang
+   kilau digerakkan lewat transform (murni compositor) — efek pita cahaya yang
+   menyapu tetap sama, tetapi repaint nol. */
+@keyframes shimmer { 0% { transform: translate3d(-100%, 0, 0); } 100% { transform: translate3d(100%, 0, 0); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes softPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @keyframes liveBlink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
@@ -654,9 +658,10 @@ td b, td strong { color: var(--text); }
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent);
-  background-size: 420px 100%;
+  background: linear-gradient(90deg, transparent 35%, rgba(255,255,255,.06) 50%, transparent 65%);
   animation: shimmer 1.3s linear infinite;
+  /* Turunkan layer sendiri agar kilau digerakkan GPU tanpa repaint skeleton. */
+  will-change: transform;
 }
 .skeleton + .skeleton { margin-top: var(--s-2); }
 .skeleton.stat-card { height: 84px; border-radius: var(--radius); }
@@ -1224,6 +1229,21 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
      dikerjakan GPU/compositor (praktis gratis) dan nilainya tetap 1 →
      tampilan 100% identik. */
   opacity: var(--cc-strength);
+  /* ---- ISOLASI LAYAR GPU (Zero Paint saat scroll) ----
+     Latar ini `position: fixed` dan berisi beberapa animasi kontinu. Tanpa
+     petunjuk di bawah, browser bisa memilih merender ulang lapisan ini saat
+     tata letak dokumen berubah (mis. saat gulir pada mobile). Ketiga baris ini
+     memaksa latar punya LAPISAN KOMPOSITOR SENDIRI:
+       • translate3d(0,0,0)  → promosi ke layer GPU sejak awal (bukan saat
+         animasi mulai) sehingga tak ada "lompatan" layer di tengah gulir;
+       • backface-visibility → buang biaya render sisi belakang yang tak terlihat;
+       • contain layout paint → render anak-anak latar TIDAK memicu reflow/
+         repaint pada dokumen: perubahan animasi di dalam tetap terkurung di
+         sini. Ini kunci agar menggulir tidak menyentuh seluruh halaman. */
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  contain: layout paint;
 }
 
 /* --- Lapis 2: grid (garis utama tiap 400px sedikit lebih terang) --- */
@@ -1242,6 +1262,11 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   animation: ccbg-denyut 6s ease-in-out infinite;
   transform-box: fill-box;
   transform-origin: center;
+  /* Berdenyut = scale + opacity tiap frame. Beri layer sendiri agar pulsanya
+     tidak memicu repaint simpul/grid di sekitarnya. Jumlah simpul aktif dibatasi
+     (tiap simpul dasar ke-3) sehingga VRAM yang dipakai tetap kecil — aman untuk
+     ponsel. */
+  will-change: transform, opacity;
 }
 
 /* --- Lapis 4: halo cakrawala --- */
@@ -1254,7 +1279,15 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 .cc-bg-svg .ccbg-halo-2 { stroke-dasharray: 2 14; opacity: .65; }
 .cc-bg-svg .ccbg-halo-3 { stroke-dasharray: 60 40; opacity: .45; }
 /* Satu grup, satu animasi → hemat GPU (bukan tiga animasi terpisah). */
-.cc-bg-svg .ccbg-halo { animation: ccbg-halo-spin 180s linear infinite; transform-origin: 800px 1180px; }
+/* will-change: transform → halo berputar tiap frame, jadi beri tahu browser
+   agar layer sudah siap sebelum animasi mulai (hilangkan frame pertama yang
+   tersendat saat dipromosikan). transform-origin x=800 = titik tengah kanvas,
+   sehingga rotasi tetap simetris. */
+.cc-bg-svg .ccbg-halo {
+  animation: ccbg-halo-spin 180s linear infinite;
+  transform-origin: 800px 1180px;
+  will-change: transform;
+}
 
 /* --- Lapis 4b: kilat Thor (margin tepi; disembunyikan < 900px) --- */
 .cc-bg-svg .ccbg-kilat-grup { animation: ccbg-kedip 9s ease-in-out infinite; }
@@ -1373,7 +1406,10 @@ html.ber-gulir .cc-bg-svg *,
 html.ber-gulir .orbit-ring,
 html.ber-gulir .o-node .t,
 html.ber-gulir .dot,
-html.ber-gulir .live-box .v::after {
+html.ber-gulir .live-box .v::after,
+html.ber-gulir .skeleton::after,
+html.ber-gulir .spinner,
+html.ber-gulir .btn.loading::before {
   animation-play-state: paused !important;
 }
 
@@ -1388,7 +1424,16 @@ html.ber-gulir .live-box .v::after {
 /* ==============================================================
    ORBIT VENDOR — "Powered by leading AI models"
    ============================================================== */
-.orbit-wrap { display: grid; place-items: center; padding: var(--s-5) 0 var(--s-2); }
+.orbit-wrap {
+  display: grid; place-items: center; padding: var(--s-5) 0 var(--s-2);
+  /* Orbit berisi beberapa elemen berputar terus. Batasi efek render mereka
+     pada kotak ini saja supaya rotasi TIDAK memicu reflow konten di luar orbit
+     saat halaman digulir. */
+  contain: layout paint;
+  /* Konteks 3D: memastikan browser mengompositkan anak-anak yang ber-transform
+     lewat jalur GPU yang sama (konsisten di desktop & WebView Android/iOS). */
+  perspective: 1000px;
+}
 .orbit {
   --orbit-r: clamp(102px, 29vw, 132px);
   position: relative;
@@ -1411,6 +1456,11 @@ html.ber-gulir .live-box .v::after {
   border: 1px dashed var(--border);
   border-radius: 50%;
   animation: orbit-cw 44s linear infinite;
+  /* Layer GPU mandiri: berputar murni via transform → tak ada repaint. */
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
 }
 .orbit-ring.rev {
   inset: 15%;
@@ -1601,3 +1651,64 @@ img, svg { max-width: 100%; height: auto; }
 /* ---------------- Format angka & pemotongan teks ---------------- */
 .stat .v, .o-node, .kv-row b, .chart-x, table td.num { font-variant-numeric: tabular-nums; }
 .cred-row, .mono, pre, .table-scroll { -webkit-overflow-scrolling: touch; }
+
+/* ==============================================================
+   ISOLASI RENDER KONTEN SAAT SCROLL (zero paint di luar viewport)
+   ==============================================================
+   Prinsip yang dipakai:
+     1. `contain: layout paint`  → tiap blok mandiri: perubahan isi/animasi di
+        dalam satu blok TIDAK memicu reflow/repaint blok lain maupun dokumen.
+        Inilah yang membuat menggulir tetap mulus meski ada animasi kontinu
+        (orbit, denyut latar, shimmer) di halaman yang sama.
+     2. `content-visibility: auto` + `contain-intrinsic-size` → blok yang jauh
+        DI LUAR viewport tidak dirender sama sekali (bukan sekadar tak tampak),
+        sehingga makin sedikit elemen beranimasi yang harus dijaga browser saat
+        tidak terlihat. `contain-intrinsic-size` WAJIB diisi sebagai perkiraan
+        tinggi: tanpa itu browser tak tahu tinggi blok yang dilewati dan
+        scrollbar bisa "melompat". Nilai di bawah adalah perkiraan dari tata
+        letak nyata (kartu ±400px) dan hanya jadi placeholder selama blok belum
+        dirender — begitu masuk viewport, tinggi aslinya dihitung ulang.
+   Catatan: blok pertama (hero) TIDAK memakai content-visibility agar gambar
+   pertama selalu langsung terlihat (mencegah kedipan di layar awal).
+   ============================================================== */
+
+/* Kartu isi jauh di bawah lipatan: tunda render sampai mendekati viewport. */
+.card.mt-4,
+.card + .card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 400px;
+}
+
+/* Panel tab yang tidak aktif sudah `display:none` (tak dirender) — yang aktif
+   diberi batas render sendiri agar animasi masuknya tidak "merembet" ke bawah. */
+.tab-panel.active { contain: layout paint; }
+
+/* Tabel (sering panjang) — kurung render di dalam wadahnya, dan blok besar
+   tabel yang jauh dari viewport ditunda. */
+.table-scroll { contain: layout paint; }
+
+/* Prefers-reduced-motion: bila pengguna minta minim gerak, matikan juga kilau
+   skeleton & denyut tombol loading supaya tak ada animasi kontinu tersisa. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after, .spinner, .btn.loading::before, .dot, .live-box .v::after { animation: none !important; }
+}
+
+/* ==============================================================
+   MOBILE-FIRST: kurangi intensitas gerak & hemat VRAM
+   ==============================================================
+   Di ponsel, tiap elemen yang punya layer GPU sendiri menambah pemakaian VRAM
+   yang terbatas. Karena itu di viewport kecil:
+     • separuh simpul latar berhenti berdenyut (sisanya tetap, jadi latar tetap
+       terasa hidup — hanya bebannya yang dipotong);
+     • petunjuk layer per-simpul dilepas (biar browser yang memutuskan);
+     • pendar cahaya (ellipse raksasa) tak perlu "ditunggu" di VRAM.
+   Animasi latar TETAP berjalan kontinu — tidak ada play/pause berbasis scroll.
+   ============================================================== */
+@media (max-width: 768px) {
+  .cc-bg-svg .ccbg-denyut:nth-child(even) { animation: none; }
+  .cc-bg-svg .ccbg-denyut { will-change: auto; }
+  .cc-bg-svg .ccbg-cahaya { will-change: auto; }
+  /* Orbit sudah diperkecil oleh breakpoint ≤640px; cukup pastikan tidak
+     menahan layer tambahan yang tak perlu di ponsel. */
+  .orbit-ring { will-change: auto; }
+}
