@@ -37,10 +37,24 @@
       <p class="muted mt-3" style="margin-bottom:0">Contoh key: <code>sk-thor-xxxxxxxxxxxx</code> (dari admin)</p>
     </div>
 
-    <!-- ============ TAB ============ -->
+    <!-- Daftar model: selalu tampil (di luar tab) -->
+    <div class="card">
+      <h2>Daftar Model Tersedia</h2>
+      <p class="muted" id="models-meta">Memuat…</p>
+      <div class="row-actions" style="margin-top:0;margin-bottom:12px">
+        <input id="search" placeholder="Cari model / vendor…" style="max-width:280px" class="w-full" />
+        <button class="btn small" id="btn-refresh">Muat Ulang</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:0">
+        <b>Multiplier</b> = pengali konsumsi token terhadap kuota. Contoh: model <code>1.5×</code>
+        dengan 2.000 token terpakai → kuota berkurang 3.000 token.
+      </p>
+      <div id="models-wrap"><p class="muted">Memuat daftar model…</p></div>
+    </div>
+
+    <!-- ============ TAB (integrasi) ============ -->
     <div class="tabs" role="tablist" aria-label="Bagian dokumentasi">
       <button class="tab active" role="tab" data-tab="mulai" aria-selected="true">🚀 Mulai Cepat</button>
-      <button class="tab" role="tab" data-tab="model" aria-selected="false">🧠 Daftar Model</button>
       <button class="tab" role="tab" data-tab="sdk" aria-selected="false">💻 SDK &amp; Kode</button>
       <button class="tab" role="tab" data-tab="aplikasi" aria-selected="false">🔌 Aplikasi Lain</button>
       <button class="tab" role="tab" data-tab="referensi" aria-selected="false">📖 Referensi</button>
@@ -76,29 +90,6 @@
         <p class="muted">Tambahkan <code>"stream": true</code> untuk menerima jawaban kata per kata.</p>
         <pre id="ex-stream">…</pre>
         <button class="btn small" data-copy="ex-stream">Salin</button>
-      </div>
-    </section>
-
-    <!-- ============ PANEL: DAFTAR MODEL ============ -->
-    <section class="tab-panel" id="panel-model" role="tabpanel">
-      <div class="card">
-        <h2>Model Tersedia</h2>
-        <p class="muted" id="models-meta">Memuat…</p>
-        <div class="row-actions" style="margin-top:0;margin-bottom:12px">
-          <input id="search" placeholder="Cari model / vendor…" style="max-width:280px" class="w-full" />
-          <button class="btn small" id="btn-refresh">Muat Ulang</button>
-        </div>
-        <p class="muted" style="font-size:13px;margin-top:0">
-          <b>Multiplier</b> = pengali konsumsi token terhadap kuota. Contoh: model <code>1.5×</code>
-          dengan 2.000 token terpakai → kuota berkurang 3.000 token.
-        </p>
-        <div id="models-wrap"><p class="muted">Memuat daftar model…</p></div>
-      </div>
-
-      <div class="card">
-        <h2>Cek Daftar Model Lewat API</h2>
-        <pre id="ex-models">…</pre>
-        <button class="btn small" data-copy="ex-models">Salin</button>
       </div>
     </section>
 
@@ -250,6 +241,12 @@
         <p class="muted mt-4" style="margin-bottom:0">
           Autentikasi: header <code>Authorization: Bearer sk-thor-xxx</code>
         </p>
+      </div>
+
+      <div class="card">
+        <h2>Cek Daftar Model Lewat API</h2>
+        <pre id="ex-models">…</pre>
+        <button class="btn small" data-copy="ex-models">Salin</button>
       </div>
 
       <div class="card">

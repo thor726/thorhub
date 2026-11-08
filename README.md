@@ -220,16 +220,17 @@ berjalan. Berguna untuk pemantauan sekilas tanpa login.
 
 ### 6.2 Dokumentasi Member — `/docs`
 
-Halaman referensi terbuka (tanpa login), disusun dalam **5 tab** agar rapi dan mudah ditelusuri.
-Pilihan tab tersimpan (bisa di-deep-link lewat `?tab=sdk`, mis. `/docs?tab=aplikasi`).
+Halaman referensi terbuka (tanpa login). **Tabel daftar model selalu tampil** di bagian atas
+(di luar tab) karena paling sering dipakai, lalu contoh **integrasi** disusun dalam **4 tab** agar
+rapi. Pilihan tab tersimpan (bisa di-deep-link lewat `?tab=sdk`, mis. `/docs?tab=aplikasi`).
 
-| Tab | Isi |
+| Bagian | Isi |
 | --- | --- |
-| 🚀 **Mulai Cepat** | 3 langkah mulai, contoh **cURL**, **PowerShell**, dan **streaming** |
-| 🧠 **Daftar Model** | Tabel model live + pencarian + endpoint daftar model |
-| 💻 **SDK & Kode** | **Python**, **Node.js**, **LangChain**, **PHP**, **Go** |
-| 🔌 **Aplikasi Lain** | **VS Code (Cline/Roo/Continue)**, **terminal VS Code**, **Open WebUI**, **ChatBox/NextChat/Jan**, **Hermes**, variabel lingkungan **Linux/macOS** & **Windows** |
-| 📖 **Referensi** | Endpoint, perhitungan token & multiplier, format respons, tabel kode error, batasan |
+| 🧠 **Daftar Model** *(selalu tampil)* | Tabel model live + pencarian + kolom multiplier & status |
+| 🚀 **Mulai Cepat** *(tab)* | 3 langkah mulai, contoh **cURL**, **PowerShell**, dan **streaming** |
+| 💻 **SDK & Kode** *(tab)* | **Python**, **Node.js**, **LangChain**, **PHP**, **Go** |
+| 🔌 **Aplikasi Lain** *(tab)* | **VS Code (Cline/Roo/Continue)**, **terminal VS Code**, **Open WebUI**, **ChatBox/NextChat/Jan**, **Hermes**, variabel lingkungan **Linux/macOS** & **Windows** |
+| 📖 **Referensi** *(tab)* | Endpoint, perhitungan token & multiplier, format respons, kode error, batasan |
 
 Fitur pendukung:
 

@@ -54,6 +54,7 @@ function initTabs() {
   });
 
   // Tentukan tab awal: dari URL → sessionStorage → default "mulai"
+  // Catatan: daftar model TIDAK lagi jadi tab (selalu tampil di atas).
   const fromUrl = new URLSearchParams(location.search).get("tab");
   const saved = sessionStorage.getItem("docs-tab");
   const valid = [...tabs].map((t) => t.dataset.tab);
