@@ -1338,6 +1338,43 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   56%      { opacity: .5; }
 }
 
+/* --- Lapis 4b: CAHAYA BERKEDIP ("lampu penanda jaringan") ---
+   Titik kecil lime yang berdenyut seperti lampu beacon: redup → terang dalam
+   sekejap lalu kembali redup. Dua elemen per titik:
+     • .ccbg-lampu       → inti titik (r 2.6), berkedip opacity.
+     • .ccbg-lampu-halo  → pendar radial di sekelilingnya, berkedip lebih lebar
+                           dan sedikit lebih lambat agar terasa "menyala".
+   Semuanya animasi `opacity` MURNI (compositor, tanpa repaint) dan TIDAK
+   dijeda saat menggulir. Durasi 5.2s dengan jeda berbeda per titik supaya
+   tidak berkedip serempak; pasangan cermin memakai jeda sama → tetap simetris.
+   (Dulu kelas ini bernama ccbg-kedip-halo, diganti agar tidak bentrok dengan
+   animasi kilat ccbg-kedip.) */
+.ccbg-lampu,
+.ccbg-lampu-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: opacity;
+}
+.ccbg-lampu {
+  fill: var(--cc-kilat);
+  animation: ccbg-denyut-lampu 5.2s ease-in-out infinite;
+}
+.ccbg-lampu-halo {
+  animation: ccbg-pendar-lampu 5.2s ease-in-out infinite;
+}
+@keyframes ccbg-denyut-lampu {
+  0%, 100% { opacity: .35; }
+  46%      { opacity: .35; }
+  50%      { opacity: 1; }
+  54%      { opacity: .45; }
+}
+@keyframes ccbg-pendar-lampu {
+  0%, 100% { opacity: 0; }
+  48%      { opacity: 0; }
+  50%      { opacity: .8; }
+  58%      { opacity: 0; }
+}
+
 /* ---------------- Adaptasi layar ----------------
    < 900px (HP / tablet potret): hero menumpuk vertikal dan mengisi hampir
    seluruh layar, jadi elemen struktural (jaringan simpul + kilat) dimatikan.
@@ -1379,39 +1416,21 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 }
 
 /* ==============================================================
-   RINGAN SAAT MENGGULIR — jeda animasi kontinu selagi pengguna menggulir
+   ANIMASI SELALU BERJALAN — mekanisme "jeda saat menggulir" DIHAPUS
    ==============================================================
-   Latar ThorHub (simpul denyut, halo berputar, pendar cahaya) dan orbit
-   vendor di beranda adalah animasi TERUS-MENERUS. Diukur nyata (Chromium,
-   perangkat mobile disimulasikan, CPU 4x lebih lambat, 390px): selagi
-   menggulir, animasi ini memaksa browser menghitung ulang GAYA + TATA LETAK
-   ~61x per detik dan membakar ~430 ms CPU tiap detik. Di ponsel, beban itu
-   memanaskan perangkat sehingga sistem MEMPERLAMBAT dirinya (thermal
-   throttling) — itulah sebabnya halaman terasa "awalnya lancar, makin lama
-   digulir makin ngelag".
+   Sebelumnya ada kelas ".ber-gulir" (dipasang public/scrollRingan.js) yang
+   memaksa SEMUA animasi latar `animation-play-state: paused` selagi pengguna
+   menggulir. Akibatnya animasi tampak "berhenti total" begitu gulir menyala —
+   dan di trackpad/momentum (dan banyak HP), peristiwa gulir menyala HAMPIR
+   TERUS, jadi animasi praktis mati sepanjang waktu. Itu keluhan yang muncul.
 
-   Obat: SELAGI pengguna menggulir, animasi latar dijeda (animation-play-state:
-   paused) lewat satu kelas ".ber-gulir" pada <html>, dipasang oleh
-   public/scrollRingan.js; ~120 ms setelah gulir berhenti, animasi lanjut dari
-   titik yang sama (bukan dari awal). Tampilan saat halaman DIAM 100% tidak
-   berubah — yang hilang hanya beban pada saat menggulir.
-
-   Hasil ukur: CPU saat menggulir 426 -> 125 ms/dtk (-71%), tata letak 61 -> 0.
-   Paused alih-alih animation:none supaya animasi TIDAK melompat/berkedip saat
-   dilanjutkan, dan supaya tidak ada perhitungan ulang animasi saat kelas
-   dipasang/dilepas.
+   Sekarang animasi latar TIDAK dijeda sama sekali: latar tetap berdenyut,
+   halo tetap berputar, dan orbit tetap bergerak walaupun halaman digulir.
+   Ini tetap murah karena seluruh animasi latar sudah murni `transform`/
+   `opacity` (murni compositor, tanpa repaint & tanpa reflow) — jadi browser
+   bisa mengompositkannya bersamaan dengan gulir tanpa membebani tata letak.
+   Aturan jeda di bawah sengaja TIDAK dipertahankan.
    ============================================================== */
-html.ber-gulir .cc-bg-svg,
-html.ber-gulir .cc-bg-svg *,
-html.ber-gulir .orbit-ring,
-html.ber-gulir .o-node .t,
-html.ber-gulir .dot,
-html.ber-gulir .live-box .v::after,
-html.ber-gulir .skeleton::after,
-html.ber-gulir .spinner,
-html.ber-gulir .btn.loading::before {
-  animation-play-state: paused !important;
-}
 
 /* Bar bergaya "uptime" tumbuh dari bawah */
 @keyframes uptime-fade-in {
@@ -1653,38 +1672,27 @@ img, svg { max-width: 100%; height: auto; }
 .cred-row, .mono, pre, .table-scroll { -webkit-overflow-scrolling: touch; }
 
 /* ==============================================================
-   ISOLASI RENDER KONTEN SAAT SCROLL (zero paint di luar viewport)
+   ISOLASI RENDER KONTEN (tanpa menghentikan animasi)
    ==============================================================
-   Prinsip yang dipakai:
-     1. `contain: layout paint`  → tiap blok mandiri: perubahan isi/animasi di
-        dalam satu blok TIDAK memicu reflow/repaint blok lain maupun dokumen.
-        Inilah yang membuat menggulir tetap mulus meski ada animasi kontinu
-        (orbit, denyut latar, shimmer) di halaman yang sama.
-     2. `content-visibility: auto` + `contain-intrinsic-size` → blok yang jauh
-        DI LUAR viewport tidak dirender sama sekali (bukan sekadar tak tampak),
-        sehingga makin sedikit elemen beranimasi yang harus dijaga browser saat
-        tidak terlihat. `contain-intrinsic-size` WAJIB diisi sebagai perkiraan
-        tinggi: tanpa itu browser tak tahu tinggi blok yang dilewati dan
-        scrollbar bisa "melompat". Nilai di bawah adalah perkiraan dari tata
-        letak nyata (kartu ±400px) dan hanya jadi placeholder selama blok belum
-        dirender — begitu masuk viewport, tinggi aslinya dihitung ulang.
-   Catatan: blok pertama (hero) TIDAK memakai content-visibility agar gambar
-   pertama selalu langsung terlihat (mencegah kedipan di layar awal).
-   ============================================================== */
+   `contain: layout paint` dipakai pada blok mandiri: perubahan isi/animasi di
+   dalam satu blok TIDAK memicu reflow/repaint blok lain maupun dokumen. Ini
+   membuat menggulir tetap mulus meski ada animasi kontinu di halaman yang sama
+   — TANPA mematikan animasi (contain hanya mengurung dampak render, bukan
+   menghentikan render).
 
-/* Kartu isi jauh di bawah lipatan: tunda render sampai mendekati viewport. */
-.card.mt-4,
-.card + .card {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 400px;
-}
+   CATATAN PENTING: `content-visibility: auto` dahulu dipakai di sini, tetapi
+   mekanisme itu MELEWATKAN render blok yang jauh dari viewport — dan elemen
+   beranimasi di dalamnya ikut berhenti terlihat/berjalan. Karena syarat proyek
+   ini adalah "animasi harus tetap berjalan walau digulir", content-visibility
+   DIHAPUS. Blok aktif tetap diberi contain agar animasinya tidak merembet keluar.
+   ============================================================== */
 
 /* Panel tab yang tidak aktif sudah `display:none` (tak dirender) — yang aktif
    diberi batas render sendiri agar animasi masuknya tidak "merembet" ke bawah. */
 .tab-panel.active { contain: layout paint; }
 
-/* Tabel (sering panjang) — kurung render di dalam wadahnya, dan blok besar
-   tabel yang jauh dari viewport ditunda. */
+/* Tabel (sering panjang) — kurung render di dalam wadahnya, tanpa menghentikan
+   animasi apa pun di dalamnya. */
 .table-scroll { contain: layout paint; }
 
 /* Prefers-reduced-motion: bila pengguna minta minim gerak, matikan juga kilau

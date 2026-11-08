@@ -244,6 +244,44 @@
   }
 
   /* ------------------------------------------------------------------ *
+   *  Lapis 4b — Cahaya berkedip ("beacon")
+   * ------------------------------------------------------------------ */
+
+  /**
+   * Pasangan titik cahaya yang BERKEDIP seperti lampu penanda jaringan.
+   * Diletakkan simetris terhadap x = 800 (memenuhi prinsip simetri latar):
+   *   kiri  (300,140) (520,300) (250,620)
+   *   kanan (1300,140)(1080,300)(1350,620)
+   * Tiap titik memakai jeda animasi berbeda supaya tidak berkedip serempak
+   * (efek kedip yang organik), tetapi pasangan cerminnya memakai jeda SAMA
+   * agar kiri-kanan tetap sealun.
+   *
+   * TIDAK ada variabel warna di sini — warna & opasitas diatur di CSS lewat
+   * kelas .ccbg-lampu agar bisa disetel tanpa menyentuh geometri.
+   */
+  function buatKedip() {
+    var pola = [
+      { x: 300, y: 140, tunda: "0s" },
+      { x: 520, y: 300, tunda: "1.1s" },
+      { x: 250, y: 620, tunda: "2.3s" },
+    ];
+    var isi = "";
+    for (var i = 0; i < pola.length; i++) {
+      var p = pola[i];
+      var mx = W - p.x; // cermin terhadap x = 800 (otomatis simetris)
+      isi += '<circle class="ccbg-lampu" cx="' + p.x + '" cy="' + p.y +
+             '" r="2.6" style="animation-delay:' + p.tunda + '"/>';
+      isi += '<circle class="ccbg-lampu-halo" cx="' + p.x + '" cy="' + p.y +
+             '" r="11" fill="url(#ccbg-lampu-pendar)" style="animation-delay:' + p.tunda + '"/>';
+      isi += '<circle class="ccbg-lampu" cx="' + mx + '" cy="' + p.y +
+             '" r="2.6" style="animation-delay:' + p.tunda + '"/>';
+      isi += '<circle class="ccbg-lampu-halo" cx="' + mx + '" cy="' + p.y +
+             '" r="11" fill="url(#ccbg-lampu-pendar)" style="animation-delay:' + p.tunda + '"/>';
+    }
+    return isi;
+  }
+
+  /* ------------------------------------------------------------------ *
    *  Perakitan SVG
    * ------------------------------------------------------------------ */
 
@@ -281,6 +319,11 @@
               'x="0" y="0" width="' + W + '" height="' + H + '">' +
           '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="url(#ccbg-pudar)"/>' +
         '</mask>' +
+        // Pendar tiap titik "cahaya berkedip" (dipakai .ccbg-lampu-halo).
+        '<radialGradient id="ccbg-lampu-pendar" cx="50%" cy="50%" r="50%">' +
+          '<stop offset="0" stop-color="#a3e635" stop-opacity=".55"/>' +
+          '<stop offset="1" stop-color="#a3e635" stop-opacity="0"/>' +
+        '</radialGradient>' +
       "</defs>" +
 
       // --- Lapis 1: cahaya ---
@@ -301,8 +344,9 @@
          lihat pudar()) — nilai pemudarnya sudah dipanggang ke fill-opacity. */
       '<g class="ccbg-net-denyut">' + jaring.simpulDenyut + "</g>" +
 
-      // --- Lapis 4: halo cakrawala + kilat ---
+      // --- Lapis 4: halo cakrawala + cahaya berkedip + kilat ---
       '<g class="ccbg-halo">' + buatHalo() + "</g>" +
+      '<g class="ccbg-lampu-grup">' + buatKedip() + "</g>" +
       '<g class="ccbg-kilat-grup">' + buatKilat() + "</g>";
 
     return svg;
