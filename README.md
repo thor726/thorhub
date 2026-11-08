@@ -119,7 +119,9 @@ llm-gateway-express/
 │
 ├── test/
 │   ├── mock-provider.js      # Provider tiruan untuk uji tanpa kredit asli
-│   └── verify-docs.js        # Verifikasi halaman /docs (tab, blok kode, tombol salin)
+│   ├── verify-docs.js        # Verifikasi halaman /docs (tab, blok kode, tombol salin)
+│   ├── check-css.js          # Validasi CSS (kurung, keyframes, typo properti)
+│   └── check-ui.js           # Integritas id HTML↔JS + ketersediaan kelas style
 └── data/
     └── gateway.db            # Database SQLite (dibuat otomatis)
 ```
@@ -273,6 +275,57 @@ Login memakai `ADMIN_PASSWORD`. Setelah masuk, tersedia:
 Sesi admin berlaku **12 jam**, sesi member **7 hari** (lihat [Keamanan](#14-keamanan)).
 
 ---
+
+### 6.5 Desain & Motion (UI/UX)
+
+Seluruh antarmuka memakai **HTML + CSS + JS vanilla**, tanpa framework atau build step.
+Gaya dan animasi terkumpul di `public/style.css`.
+
+**Animasi masuk (entrance)** — durasi .25–.45s agar terasa hidup tanpa mengganggu:
+
+| Kelas / elemen | Efek |
+| --- | --- |
+| `.stagger > *` | Anak-anaknya muncul berurutan (delay bertingkat `.04s`–`.44s`) |
+| `.stagger-rows tbody tr` | Baris tabel muncul berurutan |
+| `.tab-panel.active` | Panel tab fade + slide-up saat dibuka |
+| `.card`, `.wrap` | `riseIn` saat halaman dimuat |
+
+**Micro-interactions:**
+
+- Tombol: hover naik `-2px`; tombol `primary` membesar `scale(1.02)` + efek kilau;
+  saat diklik mengecil `scale(.97)` agar terasa ditekan.
+- Card & stat: hover terangkat + border menyala + glow halus.
+- Tab: hover terangkat; tab aktif bergradien.
+- Tautan navigasi: garis bawah bergradien tumbuh dari kiri.
+
+**Kedalaman (depth) & umpan balik:**
+
+- Bayangan berlapis: `--shadow-sm`, `--shadow-card`, `--shadow-lift`, `--shadow-topbar`.
+- **Skeleton loading** (`.skeleton`) dengan animasi *shimmer* pada tabel model & tabel key admin.
+- **Spinner** (`.spinner`) + `.loading-box` saat memeriksa sesi di `/portal` dan `/admin`.
+- Tombol berkelas `.loading` menampilkan spinner inline selama proses.
+- Indikator `.dot` berdenyut untuk status gateway.
+
+**Visual anchors — ikon & warna:**
+
+- **Ikon SVG outline** ditulis langsung di HTML (tanpa dependensi ikon eksternal),
+  dipakai di navigasi, judul, label form, dan tombol.
+- Warna teks **berlapis**: judul `--text` (terang), paragraf `--text-body` (slate),
+  meta `--muted` (redup) — tidak semua putih pekat.
+
+**Menghormati preferensi pengguna:** semua animasi otomatis dinonaktifkan bila
+sistem mengaktifkan `prefers-reduced-motion`.
+
+#### Memeriksa kesehatan UI
+
+| Perintah | Fungsi |
+| --- | --- |
+| `node test/check-css.js` | Validasi CSS: keseimbangan kurung, keyframes terdefinisi, karakter rusak, typo properti |
+| `node test/check-ui.js` | Pastikan setiap `id` yang diakses JS masih ada di HTML, tag `<div>` seimbang, kelas style tersedia |
+| `node test/verify-docs.js` | Verifikasi halaman `/docs`: tab ↔ panel, blok kode terisi, tombol salin |
+
+Ketiganya keluar dengan kode `0` bila sehat — cocok dipakai sebagai pemeriksaan
+sebelum deploy.
 
 ## 7. Menerbitkan & Mengelola Sub-API Key
 
