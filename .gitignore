@@ -8,3 +8,8 @@ npm-debug.log*
 
 # cadangan lokal tema
 .backup-tema-thor/
+
+# berkas sementara editor (vim swap untuk .env)
+.*.swp
+..env.swp
+*.swp
