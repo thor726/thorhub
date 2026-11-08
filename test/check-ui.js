@@ -103,6 +103,31 @@ for (const { html } of pairs) {
   console.log(`  ${n > 0 ? "✓" : "·"} ${html.padEnd(20)} ${n} ikon`);
 }
 
+console.log("\n=== 7. Latar ThorHub dipasang lewat bg.js (satu sumber) ===");
+{
+  const pakaiBg = fs.existsSync(path.join(pub, "bg.js"));
+  console.log(`  ${pakaiBg ? "✓" : "✗"} public/bg.js ada`);
+  if (!pakaiBg) error++;
+
+  for (const { html } of pairs) {
+    const h = read(html);
+    const adaScript = /<script[^>]+src="\/bg\.js"/.test(h);
+    const adaClass = /<body class="cc-bg"/.test(h);
+    const sisaAurora = /cc-aurora|aurora-/i.test(h);
+    const ok = adaScript && adaClass && !sisaAurora;
+    console.log(`  ${ok ? "✓" : "✗"} ${html.padEnd(20)} script:${adaScript ? "ya" : "TIDAK"} class:${adaClass ? "ya" : "TIDAK"}${sisaAurora ? " (masih ada sisa aurora!)" : ""}`);
+    if (!ok) error++;
+  }
+
+  // CSS tidak boleh lagi menyimpan gaya aurora lama, dan wajib punya gaya latar baru.
+  const css = read("style.css");
+  const adaAurora = /cc-aurora|--aurora-/.test(css);
+  const adaBgBaru = css.includes(".cc-bg-svg") && css.includes("@keyframes ccbg-spin");
+  console.log(`  ${!adaAurora ? "✓" : "✗"} CSS bebas dari gaya aurora lama`);
+  console.log(`  ${adaBgBaru ? "✓" : "✗"} CSS punya gaya latar ThorHub (.cc-bg-svg + keyframes)`);
+  if (adaAurora || !adaBgBaru) error++;
+}
+
 console.log("\n=== HASIL ===");
 console.log(error === 0 ? "UI VALID (0 masalah)" : `${error} masalah ditemukan`);
 process.exit(error === 0 ? 0 : 1);

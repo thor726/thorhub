@@ -107,7 +107,7 @@ body {
   background-color: var(--bg);
   /* Cahaya lime dari atas. Sengaja TANPA background-attachment: fixed —
      properti itu diabaikan iOS Safari & bikin latar terlihat terpotong.
-     Aurora (SVG fixed, z-index -1) sudah menangani efek kedalaman. */
+     Latar ThorHub (SVG fixed dari bg.js, z-index -1) menangani efek kedalaman. */
   background-image: radial-gradient(ellipse 80% 45% at 50% 0%, rgba(163, 230, 53, .055), transparent 70%);
   background-repeat: no-repeat;
   background-position: top center;
@@ -1182,70 +1182,103 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 .notfound-code span { color: var(--lime); }
 
 /* ==============================================================
-   AURORA — lapisan latar bergerak (referensi clariohub.id)
-   Drift 60s + halo pulse 14s. Zona animasi adaptif & hemat (GPU).
+   LATAR THORHUB — HUB (inti + cincin + jari-jari) & KILAT THOR
+   ==============================================================
+   Digambar sekali oleh bg.js (blok <svg class="cc-bg-svg">) lalu di-styling
+   di sini. Semua warna memakai variabel --cc-* agar mudah disetel.
+   Animasi sengaja pelan & hemat GPU; seluruhnya mati saat prefers-reduced-motion.
    ============================================================== */
-.cc-aurora { isolation: isolate; }
-.cc-aurora-svg {
-  --aurora-lime: #a3e635;
-  --aurora-blue: #3b82f6;
-  --aurora-violet: #a78bfa;
-  --aurora-strength: 1;
-  --aurora-halo-opacity: .14;
-  --aurora-sharp-opacity: .32;
-  --aurora-ribbon-opacity: .06;
-  --aurora-ellipse-opacity: .08;
-  --aurora-drift-duration: 60s;
-  --aurora-pulse-duration: 14s;
-  --aurora-pulse-low: .10;
-  --aurora-pulse-high: .18;
-  --aurora-mask: linear-gradient(180deg, #000 58%, transparent 99%);
-  -webkit-mask-image: var(--aurora-mask);
-  mask-image: var(--aurora-mask);
+.cc-bg { isolation: isolate; }
+.cc-bg-svg {
+  --cc-lime: #a3e635;
+  --cc-line: rgba(163, 230, 53, .20);
+  --cc-line-2: rgba(255, 255, 255, .06);
+  --cc-strength: 1;
+  --cc-mask: linear-gradient(180deg, #000 62%, transparent 99%);
+  -webkit-mask-image: var(--cc-mask);
+  mask-image: var(--cc-mask);
   position: fixed;
   display: block;
-  /* PENTING: aturan global `img, svg, video... { max-width: 100% }` akan
-     mengecap lebar SVG ini ke 100% viewport, sehingga tepi KANAN tak pernah
-     melebar melewati layar → garis gelombang terlihat terpotong lurus di kanan.
-     max-width:none membatalkan cap itu agar SVG benar-benar melebihi viewport. */
+  /* Batalkan cap global `svg { max-width: 100% }` agar SVG boleh melebihi
+     viewport (buffer gerak tidak pernah masuk ke area pandang). */
   max-width: none;
-  /* Buffer 80px tiap sisi (lebih besar dari amplitudo drift ±30px) supaya tepi
-     SVG tidak pernah masuk ke dalam area pandang saat animasi bergerak. */
-  inset: -80px;
-  width: calc(100% + 160px);
-  /* 100dvh: akurat saat address bar mobile muncul/hilang (100vh meleset) */
-  height: calc(100vh + 160px);
-  height: calc(100dvh + 160px);
+  inset: -60px;
+  width: calc(100% + 120px);
+  height: calc(100vh + 120px);
+  height: calc(100dvh + 120px); /* akurat saat address bar mobile berubah */
   z-index: -1;
   pointer-events: none;
-  filter: opacity(var(--aurora-strength));
-  animation: cc-aurora-drift var(--aurora-drift-duration) ease-in-out infinite;
+  filter: opacity(var(--cc-strength));
 }
-/* Layar sempit & tinggi (portrait): pendar diturunkan sedikit agar tidak
-   terlalu penuh, dan aurora dipertegas supaya tetap terasa di bawah lipatan */
+
+/* --- Outline HUB --- */
+.cc-bg-svg .ccbg-ring {
+  fill: none;
+  stroke: var(--cc-line);
+  stroke-width: 1.1;
+}
+.cc-bg-svg .ccbg-dash {
+  stroke-dasharray: 3 9;
+  stroke: var(--cc-lime);
+  opacity: .35;
+}
+.cc-bg-svg .ccbg-spokes line { stroke: var(--cc-line-2); stroke-width: 1; }
+.cc-bg-svg .ccbg-nodes circle { fill: var(--cc-lime); opacity: .5; }
+.cc-bg-svg .ccbg-runes line { stroke: rgba(163, 230, 53, .16); stroke-width: 1.4; }
+
+/* Hub berputar sangat pelan (satu putaran penuh = 4 menit) */
+.cc-bg-svg .ccbg-hub { animation: ccbg-spin 240s linear infinite; }
+
+/* --- Inti bercahaya dari atas --- */
+.cc-bg-svg .ccbg-coreglow { opacity: .9; animation: ccbg-breathe 18s ease-in-out infinite; }
+
+/* --- KILAT THOR --- */
+.cc-bg-svg .ccbg-bolts .ccbg-bolt {
+  fill: none;
+  stroke: var(--cc-lime);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: .35;
+  filter: drop-shadow(0 0 4px rgba(163, 230, 53, .35));
+}
+.cc-bg-svg .ccbg-bolt-fork { stroke-width: 1.1; opacity: .22; }
+.cc-bg-svg .ccbg-bolts { animation: ccbg-flicker 7s ease-in-out infinite; }
+/* Halo: salinan kilat yang diburamkan untuk efek glow lembut */
+.cc-bg-svg .ccbg-halo .ccbg-bolt {
+  fill: none;
+  stroke: var(--cc-lime);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  opacity: .10;
+  filter: blur(6px);
+}
+
+@keyframes ccbg-spin { to { transform: rotate(360deg); } }
+@keyframes ccbg-breathe {
+  0%, 100% { opacity: .9; }
+  50%      { opacity: .55; }
+}
+@keyframes ccbg-flicker {
+  0%, 100% { opacity: .55; }
+  42%      { opacity: .45; }
+  46%      { opacity: .9; }
+  48%      { opacity: .5; }
+  52%      { opacity: .78; }
+  56%      { opacity: .5; }
+}
+
+/* Layar sempit: pendar dipertegas & mask dinaikkan agar tetap terasa di HP */
 @media (max-width: 640px) {
-  .cc-aurora-svg {
-    --aurora-halo-opacity: .16;
-    --aurora-sharp-opacity: .30;
-    --aurora-strength: .85;
-    --aurora-mask: linear-gradient(180deg, #000 42%, transparent 92%);
+  .cc-bg-svg {
+    --cc-strength: .9;
+    --cc-mask: linear-gradient(180deg, #000 46%, transparent 92%);
   }
 }
-/* Layar sangat lebar: batasi tinggi pendar agar tidak "menggantung" di PC besar */
 @media (min-width: 1600px) {
-  .cc-aurora-svg { --aurora-strength: .9; }
+  .cc-bg-svg { --cc-strength: .95; }
 }
-.cc-aurora-halo { opacity: var(--aurora-halo-opacity); animation: cc-aurora-pulse var(--aurora-pulse-duration) ease-in-out infinite; }
-.cc-aurora-sharp { opacity: var(--aurora-sharp-opacity); }
 
-@keyframes cc-aurora-drift {
-  0%, 100% { transform: translate3d(-30px, -15px, 0); }
-  50%      { transform: translate3d(30px, 15px, 0); }
-}
-@keyframes cc-aurora-pulse {
-  0%, 100% { opacity: var(--aurora-pulse-low); }
-  50%      { opacity: var(--aurora-pulse-high); }
-}
 /* Bar bergaya "uptime" tumbuh dari bawah */
 @keyframes uptime-fade-in {
   from { opacity: .25; transform: scaleY(.6); }
@@ -1368,7 +1401,8 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cc-aurora-svg, .cc-aurora-halo, .orbit-ring, .o-node .t { animation: none !important; }
+  .cc-bg-svg, .cc-bg-svg .ccbg-hub, .cc-bg-svg .ccbg-coreglow, .cc-bg-svg .ccbg-bolts,
+  .orbit-ring, .o-node .t { animation: none !important; }
 }
 
 /* ==============================================================
@@ -1453,7 +1487,7 @@ img, svg { max-width: 100%; height: auto; }
 
 /* ---------------- Cetak ---------------- */
 @media print {
-  .topbar, .nav-toggle, .cc-aurora-svg, .tabs, .row-actions, .orbit { display: none !important; }
+  .topbar, .nav-toggle, .cc-bg-svg, .tabs, .row-actions, .orbit { display: none !important; }
   body { background: #fff; color: #000; }
   .card, .stat, .table-scroll { border-color: #ccc; box-shadow: none; }
 }
