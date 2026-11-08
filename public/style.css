@@ -1713,8 +1713,15 @@ img, svg { max-width: 100%; height: auto; }
    Animasi latar TETAP berjalan kontinu — tidak ada play/pause berbasis scroll.
    ============================================================== */
 @media (max-width: 768px) {
-  .cc-bg-svg .ccbg-denyut:nth-child(even) { animation: none; }
-  .cc-bg-svg .ccbg-denyut { will-change: auto; }
+  /* SEMUA simpul berdenyut & lampu berkedip TETAP BERJALAN di ponsel — tidak
+     ada yang dimatikan (menghormati syarat "animasi harus terus berjalan").
+     Yang dikurangi hanya PETUNJUK LAYER-nya (will-change:auto): browser yang
+     memutuskan kapan mempromosikan ke GPU, sehingga VRAM ponsel yang terbatas
+     tidak dihabiskan untuk menyimpan layer setiap titik sekaligus. Hasil visual
+     identik, beban memori lebih terjaga. */
+  .cc-bg-svg .ccbg-denyut,
+  .cc-bg-svg .ccbg-lampu,
+  .cc-bg-svg .ccbg-lampu-halo { will-change: auto; }
   .cc-bg-svg .ccbg-cahaya { will-change: auto; }
   /* Orbit sudah diperkecil oleh breakpoint ≤640px; cukup pastikan tidak
      menahan layer tambahan yang tak perlu di ponsel. */
