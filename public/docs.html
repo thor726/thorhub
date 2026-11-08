@@ -364,7 +364,7 @@
               <tr><td>401</td><td class="mono">invalid_api_key</td><td>Key salah / tidak terdaftar</td><td>Periksa key Anda</td></tr>
               <tr><td>403</td><td class="mono">key_disabled</td><td>Key dinonaktifkan admin</td><td>Hubungi admin</td></tr>
               <tr><td>403</td><td class="mono">quota_exceeded</td><td>Kuota token habis</td><td>Lakukan top-up</td></tr>
-              <tr><td>503</td><td class="mono">queue_timeout</td><td>Mengantre &gt; 60 detik</td><td>Coba lagi nanti</td></tr>
+              <tr><td>503</td><td class="mono">queue_timeout</td><td>Antrean penuh (tidak berlaku — rate limit dimatikan)</td><td>Tidak perlu tindakan</td></tr>
               <tr><td>504</td><td class="mono">upstream_timeout</td><td>Provider tidak merespons</td><td>Coba lagi</td></tr>
             </tbody>
           </table>
@@ -375,7 +375,7 @@
       <div class="card">
         <h2>Batasan &amp; Catatan</h2>
         <ul class="steps">
-          <li>Gateway membatasi <b>25 request / 60 detik</b> dan <b>maks 3 paralel</b>. Kelebihannya mengantre (maks 60 detik), bukan ditolak.</li>
+          <li>Gateway berjalan <b>tanpa batas rate limit (unlimited)</b> — tidak ada pembatasan request per menit atau per paralel. Setiap request langsung diteruskan ke provider.</li>
           <li>Timeout request ke provider: <b>120 detik</b>.</li>
           <li>Body request maksimal <b>8 MB</b>.</li>
           <li>Semua parameter OpenAI (<code>temperature</code>, <code>max_tokens</code>, <code>tools</code>, dst.) diteruskan apa adanya.</li>

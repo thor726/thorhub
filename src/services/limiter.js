@@ -1,28 +1,78 @@
 /**
- * limiter.js — Antrean & rate limiting global menuju provider utama.
+ * limiter.js — Rate limiting DINONAKTIFKAN (mode UNLIMITED).
  *
- * Limit asli provider: 30 request/menit (30 RPM).
- * Kita memakai 25 RPM sebagai buffer agar tidak pernah menyentuh limit asli.
+ * ---------------------------------------------------------------
+ * RIWAYAT
+ * ---------------------------------------------------------------
+ * Sebelumnya modul ini memakai Bottleneck untuk membatasi laju request:
+ *   - reservoir 25 request / 60 detik (buffer dari limit 30 RPM provider)
+ *   - maksimal 3 request paralel
+ *   - request berlebih MENGANTRE (FIFO), bukan ditolak
  *
- * Cara kerja "reservoir": setiap 60 detik kapasitas di-reset menjadi 25.
- * Setiap request yang dieksekusi memakai 1 kapasitas. Jika reservoir kosong,
- * request berikutnya otomatis MENGANTRE (bukan ditolak) hingga kapasitas
- * berikutnya tersedia atau timeout antrean tercapai.
+ * ---------------------------------------------------------------
+ * KONDISI SEKARANG
+ * ---------------------------------------------------------------
+ * Atas permintaan pemilik sistem, SELURUH pembatasan RPM / rate limit /
+ * throttling dimatikan. Setiap request LANGSUNG dieksekusi:
+ *   - tanpa batas jumlah request per menit  → unlimited
+ *   - tanpa batas jumlah request paralel    → unlimited
+ *   - tanpa antrean (FIFO)                  → tidak ada penundaan buatan
+ *   - tanpa jeda / delay / timeout antrean  → langsung jalan
+ *
+ * ---------------------------------------------------------------
+ * KOMPATIBILITAS ANTARMUKA
+ * ---------------------------------------------------------------
+ * Modul ini sengaja mempertahankan antarmuka (interface) SAMA seperti
+ * versi Bottleneck, supaya seluruh pemanggil tidak perlu diubah dan
+ * logika bisnis inti tetap utuh:
+ *
+ *   await limiter.schedule(task)           // jalankan task segera
+ *   await limiter.schedule({ ... }, task)  // opsi apa pun diabaikan
+ *   limiter.running()                      // jumlah request aktif
+ *   limiter.queued()                       // selalu 0 (tak ada antrean)
+ *
+ * Pemanggil saat ini: src/services/proxy.js, src/routes/chat.js,
+ * dan src/server.js (status /health).
  */
-const Bottleneck = require("bottleneck");
 
-const limiter = new Bottleneck({
-  // --- Batas laju: 25 request per 60 detik ---
-  reservoir: 25,                     // kapasitas awal per interval
-  reservoirRefreshAmount: 25,        // jumlah kapasitas saat refresh
-  reservoirRefreshInterval: 60_000,  // interval refresh: 60 detik
+// Penghitung request yang sedang berjalan (hanya untuk pelaporan /health).
+let active = 0;
 
-  // --- Batas paralel ---
-  maxConcurrent: 3,                  // maksimal 3 request berjalan bersamaan
+/**
+ * Jalankan `task` SEGERA tanpa rate limit, tanpa antre, tanpa delay.
+ * Mendukung dua bentuk pemanggilan demi kompatibilitas:
+ *   schedule(task)
+ *   schedule(options, task)   // options diabaikan sepenuhnya
+ *
+ * @param {...any} args argumen terakhir wajib berupa fungsi (task).
+ * @returns {Promise<any>} hasil dari task (atau error dari task).
+ */
+function schedule(...args) {
+  const task = typeof args[args.length - 1] === "function" ? args[args.length - 1] : null;
+  if (!task) {
+    return Promise.reject(
+      new TypeError("limiter.schedule(): argumen task (fungsi) tidak ditemukan")
+    );
+  }
 
-  // Jika antrean tak terkendali, tolak (jangan tumpuk memori)
-  highWater: 1000,
-  rejectOnDrop: true,
-});
+  active += 1;
+  // Promise.resolve() memastikan task dijalankan secara asinkron (mirip
+  // perilaku Bottleneck), lalu .finally menurunkan penghitung.
+  return Promise.resolve()
+    .then(() => task())
+    .finally(() => {
+      active -= 1;
+    });
+}
 
-module.exports = limiter;
+/** Jumlah request yang sedang dieksekusi saat ini. */
+function running() {
+  return active;
+}
+
+/** Jumlah request dalam antrean — selalu 0 karena tidak ada antrean. */
+function queued() {
+  return 0;
+}
+
+module.exports = { schedule, running, queued };

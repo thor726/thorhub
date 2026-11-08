@@ -4,8 +4,8 @@
  * Alur satu request:
  *   runJob()
  *     ├─ pasang timer "timeout antrean" (QUEUE_WAIT_TIMEOUT_MS, default 60 dtk)
- *     ├─ antre di limiter (Bottleneck: 25 RPM, maks 3 paralel)
- *     ├─ task() dieksekusi saat giliran tiba
+ *     ├─ limiter.schedule() → eksekusi LANGSUNG (rate limit DINONAKTIFKAN)
+ *     ├─ task() dieksekusi segera tanpa antrean
  *     │    └─ doForward() → fetch ke provider dengan MASTER_API_KEY
  *     ├─ response diteruskan utuh ke pembeli
  *     └─ usage.total_tokens dicatat ke kolom tokens_used di database
@@ -188,8 +188,10 @@ async function doForward(state, subKey, payload, res, endpoint = "/chat/completi
 
   // Error dari provider → teruskan status & body apa adanya ke pembeli
   if (!response.ok) {
-    // Provider bilang kewalahan (429) → kurangi sementara kapasitas antrean gateway
-    // agar request berikutnya lebih jarang, sampai reservoir ter-refresh lagi.
+    // Catatan: dulu ada "penalty" 429 yang mengurangi reservoir Bottleneck.
+    // Karena rate limit kini DINONAKTIFKAN (limiter tanpa reservoir), tidak ada
+    // lagi yang perlu dikurangi. Kode dipertahankan sebagai no-op agar aman bila
+    // limiter suatu saat punya reservoir lagi.
     if (response.status === 429 && typeof limiter.incrementReservoir === "function") {
       limiter.incrementReservoir(-2).catch(() => {});
     }

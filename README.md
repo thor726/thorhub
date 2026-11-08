@@ -56,10 +56,9 @@ Pembeli (sk-thor-xxx)                    Admin (browser)
 │                                                              │
 │  Alur request chat:                                          │
 │   1. auth.js      → cek key aktif + kuota token (SQLite)     │
-│   2. limiter.js   → antrean Bottleneck                       │
-│      • 25 request / 60 detik (buffer dari limit provider)    │
-│      • maks 3 request paralel, FIFO                         │
-│      • timeout antrean 60 dtk → 503 queue_timeout           │
+│   2. limiter.js   → eksekusi LANGSUNG (rate limit MATI)      │
+│      • TANPA batas RPM, TANPA batas paralel, TANPA antrean   │
+│      • request diteruskan segera ke provider                │
 │   3. proxy.js     → forward payload utuh ke provider         │
 │      dengan MASTER_API_KEY (JSON & streaming SSE)            │
 │   4. usage.total_tokens → tokens_used += total              │
@@ -99,7 +98,7 @@ llm-gateway-express/
 │   │   ├── portal.js         # Sesi login + daftar model publik (/portal/*)
 │   │   └── admin.js          # REST API manajemen key (ADMIN_API_KEY)
 │   └── services/
-│       ├── limiter.js        # Antrean Bottleneck (25 RPM / 3 paralel)
+│       ├── limiter.js        # Rate limit DIMATIKAN (unlimited, tanpa antrean)
 │       └── proxy.js          # Forwarding + hitung token + timeout
 │
 ├── public/                   # Antarmuka web (tanpa build step)
@@ -139,7 +138,7 @@ Dependensi (lihat `package.json`):
 | --- | --- |
 | `express` | Web framework & static file |
 | `better-sqlite3` | Database SQLite sinkron (cepat, tanpa ORM) |
-| `bottleneck` | Antrean & rate limiter in-memory |
+| ~~`bottleneck`~~ | **Dihapus** — rate limiter dinonaktifkan (unlimited) |
 | `dotenv` | Membaca konfigurasi dari `.env` |
 
 ---
@@ -200,8 +199,8 @@ Saat berjalan, server mencetak ringkasan:
   LLM Proxy Gateway siap menerima request
   Port lokal      : 3000
   Provider target : https://api.relink-gateway.biz.id/v1
-  Rate limit      : 25 request/60 dtk, maks 3 paralel
-  Timeout antrean : 60 dtk
+  Rate limit      : TANPA BATAS (unlimited, tanpa antrean)
+  Timeout antrean : 60 dtk (nonaktif efektif)
 ==============================================
 ```
 
@@ -696,27 +695,29 @@ curl -b cookies.txt http://localhost:3000/portal/member/me
 
 ---
 
-## 12. Rate Limiting & Antrean
+## 12. Rate Limiting & Antrean — DINONAKTIFKAN
 
-Konfigurasi Bottleneck (`src/services/limiter.js`):
+> **Status: rate limit / RPM limit / throttling DIMATIKAN sepenuhnya.**
+> Gateway kini berjalan **UNLIMITED** — tanpa batas request per menit, tanpa batas paralel,
+> dan tanpa antrean. Setiap request langsung diteruskan ke provider.
 
-| Parameter | Nilai | Arti |
-| --- | --- | --- |
-| `reservoir` | 25 | Kapasitas 25 request |
-| `reservoirRefreshInterval` | 60.000 ms | Di-reset jadi 25 setiap 60 detik |
-| `maxConcurrent` | 3 | Maks 3 request paralel ke provider |
-| Timeout antrean | 60.000 ms | Yang masih mengantre → HTTP 503 `queue_timeout` |
-| `UPSTREAM_TIMEOUT_MS` | 120.000 ms | Request menggantung ke provider dibatalkan |
+`src/services/limiter.js` tidak lagi memakai Bottleneck. Modul tersebut kini hanya
+menjembatani pemanggilan lama (`limiter.schedule(task)`) agar langsung mengeksekusi task:
 
-- Limit provider (mis. 30 RPM) → gateway hanya mengirim **maks 25 RPM** (buffer 5 request).
-- Request berlebih **mengantre (FIFO)**, bukan langsung ditolak — pembeli dilayani begitu giliran
-  tiba, selama menunggu ≤ 60 detik.
-- Jika provider membalas `429`, gateway menambah *penalty* ke antrean.
+| Fungsi | Perilaku sekarang |
+| --- | --- |
+| `schedule(task)` | Langsung menjalankan `task` tanpa antre & tanpa delay |
+| `running()` | Jumlah request yang sedang berjalan (untuk `/health`) |
+| `queued()` | Selalu `0` — tidak ada antrean |
 
-**Penting:** limiter berjalan **per proses**. Bila menjalankan banyak instance paralel, gunakan
-mode cluster Redis dari Bottleneck atau tetap satu proses.
+- Tidak ada lagi pemotongan 25 RPM maupun batas `maxConcurrent`.
+- Tidak ada lagi penundaan/antrean FIFO maupun HTTP `503 queue_timeout` akibat antre.
+- Parameter `QUEUE_WAIT_TIMEOUT_MS` tetap ada di konfigurasi demi kompatibilitas, tetapi
+  praktis tidak pernah terpicu karena tidak ada antrean yang membuat request menunggu.
+- `UPSTREAM_TIMEOUT_MS` (120.000 ms) **tetap berlaku** — ini timeout jaringan ke provider,
+  bukan rate limit, dan berfungsi melindungi dari koneksi menggantung.
 
-Monitoring antrean: `GET /health` → `{ "status": "ok", "queue": { "running": …, "queued": 0 } }`
+Monitoring status: `GET /health` → `{ "status": "ok", "queue": { "running": …, "queued": 0 } }`
 
 ---
 

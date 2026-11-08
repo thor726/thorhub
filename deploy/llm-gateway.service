@@ -1,5 +1,5 @@
 [Unit]
-Description=LLM Proxy Gateway (Express.js + SQLite + Bottleneck)
+Description=LLM Proxy Gateway (Express.js + SQLite, tanpa rate limit)
 Documentation=file:///root/home/projects/llm-gateway-express/README.md
 After=network-online.target
 Wants=network-online.target

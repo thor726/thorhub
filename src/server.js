@@ -134,7 +134,7 @@ app.listen(config.port, () => {
   console.log("  LLM Proxy Gateway siap menerima request");
   console.log(`  Port lokal      : ${config.port}`);
   console.log(`  Provider target : ${config.targetBaseUrl}`);
-  console.log(`  Rate limit      : 25 request/60 dtk, maks 3 paralel`);
-  console.log(`  Timeout antrean : ${config.queueWaitTimeoutMs / 1000} dtk`);
+  console.log(`  Rate limit      : TANPA BATAS (unlimited, tanpa antrean)`);
+  console.log(`  Timeout antrean : ${config.queueWaitTimeoutMs / 1000} dtk (nonaktif efektif)`);
   console.log("==============================================");
 });
