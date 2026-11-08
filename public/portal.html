@@ -20,26 +20,53 @@
       <span class="icon-close">✕</span>
     </button>
     <nav id="main-nav">
-      <a href="/">Beranda</a>
-      <a href="/docs">Dokumentasi</a>
-      <a href="/admin">Panel Admin</a>
-      <a href="#" id="btn-logout" class="hidden">Keluar</a>
+      <a href="/">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+        Beranda
+      </a>
+      <a href="/docs">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Dokumentasi
+      </a>
+      <a href="/admin">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3z"/></svg>
+        Panel Admin
+      </a>
+      <a href="#" id="btn-logout" class="hidden">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+        Keluar
+      </a>
     </nav>
   </header>
 
   <main class="wrap">
-    <div id="loading" class="card center"><p class="muted">Memuat…</p></div>
+    <!-- Skeleton pemuatan awal (digantikan oleh konten JS) -->
+    <div id="loading" class="card">
+      <div class="loading-box">
+        <span class="spinner"></span>
+        Memuat data akun…
+      </div>
+    </div>
 
     <!-- SECTION LOGIN -->
     <div id="login-section" class="hidden">
       <div class="narrow card" style="margin:0 auto">
-        <h1>Portal <span class="grad">Member</span></h1>
+        <h1>
+          <svg class="ico" style="width:28px;height:28px;color:var(--accent)" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Portal <span class="grad">Member</span></span>
+        </h1>
         <p class="sub">Masuk dengan Sub-API Key Anda untuk melihat kuota pemakaian.</p>
         <form id="form-login">
-          <label for="apikey">Sub-API Key</label>
+          <label for="apikey">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 1-7.1 7.1 5 5 0 0 1 7.1-7.1zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3"/></svg>
+            Sub-API Key
+          </label>
           <input id="apikey" type="password" class="mono" placeholder="sk-thor-..." autocomplete="off" required />
           <div class="row-actions">
-            <button class="btn primary w-full" type="submit" id="btn-login">Masuk</button>
+            <button class="btn primary w-full" type="submit" id="btn-login">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+              Masuk
+            </button>
           </div>
         </form>
         <div id="login-msg"></div>
@@ -47,29 +74,47 @@
     </div>
 
     <div id="panel" class="hidden">
-      <h1>Halo, <span class="grad" id="uname">…</span></h1>
+      <h1>
+        <svg class="ico" style="width:30px;height:30px;color:var(--accent)" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>Halo, <span class="grad" id="uname">…</span></span>
+      </h1>
       <p class="sub">Pantau kuota token dan contoh pemakaian Anda.</p>
 
       <div id="status-warn"></div>
 
-      <div class="grid" id="cards"></div>
+      <div class="grid stagger" id="cards"></div>
 
       <div class="card mt-4">
-        <h2>Sub-API Key Anda</h2>
+        <h2>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 1-7.1 7.1 5 5 0 0 1 7.1-7.1zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3"/></svg>
+          Sub-API Key Anda
+        </h2>
         <div class="mono" style="word-break:break-all;user-select:all" id="mykey">…</div>
         <div class="row-actions">
-          <button class="btn small" id="btn-reveal">Tampilkan</button>
-          <button class="btn small" id="btn-copy">Salin</button>
+          <button class="btn small" id="btn-reveal">
+            <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            Tampilkan
+          </button>
+          <button class="btn small" id="btn-copy">
+            <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Salin
+          </button>
         </div>
       </div>
 
       <div class="card">
-        <h2>Contoh Pemakaian (curl)</h2>
+        <h2>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+          Contoh Pemakaian (curl)
+        </h2>
         <pre id="curl-example">…</pre>
       </div>
 
       <div class="card">
-        <h2>Contoh Python (OpenAI SDK)</h2>
+        <h2>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3z"/></svg>
+          Contoh Python (OpenAI SDK)
+        </h2>
         <pre id="py-example">…</pre>
       </div>
     </div>

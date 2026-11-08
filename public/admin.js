@@ -97,6 +97,7 @@ async function loadKeys() {
     wrap.innerHTML = `<p class="muted">Belum ada Sub-API Key. Terbitkan yang pertama di atas.</p>`;
     return;
   }
+  // (baris tabel dirender dengan kelas "stagger-rows" agar muncul berurutan)
   const rows = keys.map((k) => {
     const pct = k.token_limit > 0 ? Math.round((k.tokens_used / k.token_limit) * 100) : 0;
     return `<tr data-key="${esc(k.api_key)}">
@@ -118,7 +119,7 @@ async function loadKeys() {
     </tr>`;
   }).join("");
 
-  wrap.innerHTML = `<div class="table-scroll"><table>
+  wrap.innerHTML = `<div class="table-scroll"><table class="stagger-rows">
     <thead><tr><th>ID</th><th>Nama</th><th>API Key</th><th>Pemakaian</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;

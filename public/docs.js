@@ -309,7 +309,7 @@ function renderModels(filter = "") {
     <td class="col-action"><button class="btn small" data-model="${esc(m.id)}">Pakai</button></td>
   </tr>`;
   }).join("");
-  $("models-wrap").innerHTML = `<div class="table-scroll"><table class="models-table">
+  $("models-wrap").innerHTML = `<div class="table-scroll"><table class="models-table stagger-rows">
     <thead><tr>
       <th>Model ID</th>
       <th>Vendor</th>

@@ -19,22 +19,40 @@
       <span class="icon-close">✕</span>
     </button>
     <nav id="main-nav">
-      <a href="/">Beranda</a>
-      <a href="/docs">Dokumentasi</a>
-      <a href="/portal">Portal Member</a>
+      <a href="/">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+        Beranda
+      </a>
+      <a href="/docs">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Dokumentasi
+      </a>
+      <a href="/portal">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Portal Member
+      </a>
     </nav>
   </header>
 
   <main class="wrap narrow">
     <div class="card">
-      <h1>Panel <span class="grad">Admin</span></h1>
+      <h1>
+        <svg class="ico" style="width:28px;height:28px;color:var(--accent)" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3z"/></svg>
+        <span>Panel <span class="grad">Admin</span></span>
+      </h1>
       <p class="sub">Masuk dengan password admin untuk mengelola sub-API key.</p>
 
       <form id="form">
-        <label for="password">Password Admin</label>
+        <label for="password">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Password Admin
+        </label>
         <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
         <div class="row-actions">
-          <button class="btn primary w-full" type="submit" id="btn">Masuk</button>
+          <button class="btn primary w-full" type="submit" id="btn">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+            Masuk
+          </button>
         </div>
       </form>
       <div id="msg"></div>
@@ -53,6 +71,7 @@
       e.preventDefault();
       msg.innerHTML = "";
       btn.disabled = true;
+      btn.classList.add("loading");
       try {
         const r = await fetch("/portal/admin/login", {
           method: "POST",
@@ -69,6 +88,7 @@
         msg.innerHTML = `<div class="alert err">Gagal menghubungi server.</div>`;
       } finally {
         btn.disabled = false;
+        btn.classList.remove("loading");
       }
     });
   </script>

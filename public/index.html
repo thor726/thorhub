@@ -21,33 +21,58 @@
       <span class="icon-close">✕</span>
     </button>
     <nav id="main-nav">
-      <a href="/docs">Dokumentasi</a>
-      <a href="/admin">Panel Admin</a>
-      <a href="/portal">Portal Member</a>
+      <a href="/docs">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Dokumentasi
+      </a>
+      <a href="/admin">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3z"/></svg>
+        Panel Admin
+      </a>
+      <a href="/portal">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Portal Member
+      </a>
     </nav>
   </header>
 
   <main class="wrap">
-    <h1><span class="grad">ThorHub</span> — Satu API, Semua Model AI</h1>
+    <h1>
+      <svg class="ico" style="width:34px;height:34px;color:var(--bolt)" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>
+      <span><span class="grad">ThorHub</span> — Satu API, Semua Model AI</span>
+    </h1>
     <p class="sub">Gateway LLM dengan sub-API key, kuota token, dan rate limit. Bangun produk AI Anda tanpa pusing urusan provider.</p>
 
-    <div class="grid">
-      <div class="stat"><div class="k">Status</div><div class="v" id="st-status">…</div></div>
-      <div class="stat"><div class="k">Antrean</div><div class="v" id="st-queue">…</div></div>
-      <div class="stat"><div class="k">Berjalan</div><div class="v" id="st-running">…</div></div>
+    <!-- Status gateway: skeleton dulu, lalu diisi JS -->
+    <div class="grid stagger" id="status-grid">
+      <div class="stat">
+        <div class="k"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Status</div>
+        <div class="v" id="st-status"><span class="skeleton w-60" style="display:inline-block;height:22px;vertical-align:middle"></span></div>
+      </div>
+      <div class="stat">
+        <div class="k"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg> Antrean</div>
+        <div class="v" id="st-queue"><span class="skeleton w-40" style="display:inline-block;height:22px;vertical-align:middle"></span></div>
+      </div>
+      <div class="stat">
+        <div class="k"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Berjalan</div>
+        <div class="v" id="st-running"><span class="skeleton w-60" style="display:inline-block;height:22px;vertical-align:middle"></span></div>
+      </div>
     </div>
 
     <div class="card mt-4">
-      <h2>Endpoint untuk Pembeli</h2>
+      <h2>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+        Endpoint untuk Pembeli
+      </h2>
       <div class="table-scroll">
         <table>
           <thead>
             <tr><th>Metode</th><th>Endpoint</th><th>Keterangan</th></tr>
           </thead>
           <tbody>
-            <tr><td>POST</td><td class="mono">/v1/chat/completions</td><td>Chat (JSON &amp; streaming SSE)</td></tr>
-            <tr><td>GET</td><td class="mono">/v1/models</td><td>Daftar model dari provider</td></tr>
-            <tr><td>GET</td><td class="mono">/health</td><td>Health check</td></tr>
+            <tr><td><span class="tag ok">POST</span></td><td class="mono">/v1/chat/completions</td><td>Chat (JSON &amp; streaming SSE)</td></tr>
+            <tr><td><span class="tag ok">GET</span></td><td class="mono">/v1/models</td><td>Daftar model dari provider</td></tr>
+            <tr><td><span class="tag ok">GET</span></td><td class="mono">/health</td><td>Health check</td></tr>
           </tbody>
         </table>
       </div>
@@ -55,31 +80,43 @@
     </div>
 
     <div class="card">
-      <h2>Mulai Cepat</h2>
+      <h2>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>
+        Mulai Cepat
+      </h2>
       <pre>curl http://127.0.0.1:3000/v1/chat/completions \
   -H "Authorization: Bearer sk-thor-XXX" \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"Halo"}]}'</pre>
       <div class="row-actions">
-        <a class="btn primary" href="/docs">Buka Dokumentasi</a>
-        <a class="btn" href="/portal">Portal Member</a>
+        <a class="btn primary" href="/docs">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          Buka Dokumentasi
+        </a>
+        <a class="btn" href="/portal">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Portal Member
+        </a>
       </div>
     </div>
   </main>
 
   <script defer src="/nav.js"></script>
   <script>
+    /* loadStatus — HANYA mengubah isi teks; struktur & logika tetap sama. */
     async function loadStatus() {
       try {
         const r = await fetch("/health");
         const d = await r.json();
-        document.getElementById("st-status").textContent = d.status === "ok" ? "Aktif" : "Gangguan";
+        const ok = d.status === "ok";
+        document.getElementById("st-status").innerHTML =
+          '<span class="dot' + (ok ? "" : " off") + '"></span> ' + (ok ? "Aktif" : "Gangguan");
         document.getElementById("st-queue").textContent = d.queue?.queued ?? 0;
         const running = d.queue?.running;
         document.getElementById("st-running").textContent =
           typeof running === "object" ? JSON.stringify(running) : (running ?? 0);
       } catch {
-        document.getElementById("st-status").textContent = "Offline";
+        document.getElementById("st-status").innerHTML = '<span class="dot off"></span> Offline';
       }
     }
     loadStatus();
