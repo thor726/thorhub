@@ -24,7 +24,6 @@ const DEFAULT_MODEL = models.DEFAULT_MODEL;
 // Cache sederhana daftar model (hindari spam ke provider tiap request)
 let modelsCache = { at: 0, data: null };
 const MODELS_TTL_MS = 60 * 1000; // 60 detik
-const https = require("https");
 
 const router = express.Router();
 
@@ -426,7 +425,7 @@ router.get("/member/usage", requireMemberSession, (req, res) => {
     .map((r) => ({
       ...r,
       model: r.model || "(tidak diketahui)",
-      multiplier: multiplierOf(r.model),
+      multiplier: models.multiplierOf(r.model),
     }));
 
   // Pemakaian harian 30 hari terakhir (termasuk hari tanpa pemakaian = 0)
@@ -474,12 +473,5 @@ router.get("/member/usage", requireMemberSession, (req, res) => {
     },
   });
 });
-
-/** Ambil multiplier model dari katalog lokal (1 bila tidak ditemukan). */
-function multiplierOf(modelId) {
-  if (!modelId) return 1;
-  const m = models.MODELS.find((x) => x.id === modelId);
-  return m && Number.isFinite(m.multiplier) ? m.multiplier : 1;
-}
 
 module.exports = router;

@@ -667,11 +667,6 @@ td b, td strong { color: var(--text); }
   animation: shimmer 1.3s linear infinite;
 }
 .skeleton + .skeleton { margin-top: var(--s-2); }
-.skeleton.w-40 { width: 40%; }
-.skeleton.w-60 { width: 60%; }
-.skeleton.w-80 { width: 80%; }
-.skeleton.w-full { width: 100%; }
-.skeleton.title { height: 20px; }
 .skeleton.stat-card { height: 84px; border-radius: var(--radius); }
 .skeleton.row { height: 42px; border-radius: 0; margin: 0; }
 
@@ -797,7 +792,9 @@ pre {
   transition: border-color var(--t-fast) ease;
 }
 pre::before {
-  content: "● ● ●";
+  /* Tiga titik "jendela terminal" ditulis sebagai escape unicode (\25CF = ●)
+     agar berkas CSS murni ASCII dan aman dari masalah encoding. */
+  content: "\25CF \25CF \25CF";
   display: block;
   font-size: 8px;
   letter-spacing: 3px;
@@ -809,13 +806,8 @@ pre:hover { border-color: var(--border-2); }
 /* ==============================================================
    UTILITAS
    ============================================================== */
-.flex { display: flex; }
-.items-center { align-items: center; }
-.gap-2 { gap: var(--s-2); }
-.gap-3 { gap: var(--s-3); }
 .mt-3 { margin-top: var(--s-3); }
 .mt-4 { margin-top: var(--s-4); }
-.mb-3 { margin-bottom: var(--s-3); }
 .mb-4 { margin-bottom: var(--s-4); }
 .w-full { width: 100%; }
 .grid-2 { display: grid; grid-template-columns: 1fr; gap: var(--s-4); }
@@ -1152,6 +1144,30 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   .modal { padding: var(--s-4); max-height: 90dvh; }
 }
 
+/* Dialog konfirmasi/input kustom (pengganti window.confirm/prompt) */
+.dlg-input { margin-top: var(--s-2); }
+.dlg-err:empty { display: none; }
+
+/* Notifikasi melayang (pengganti window.alert) — kanan atas */
+.notif-box {
+  position: fixed;
+  top: calc(var(--s-4) + var(--sa-t));
+  right: calc(var(--s-4) + var(--sa-r));
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  width: min(340px, calc(100vw - 2 * var(--s-4)));
+  pointer-events: none;
+}
+.notif-box .alert {
+  margin: 0;
+  pointer-events: auto;
+  box-shadow: var(--shadow-lift);
+  transition: opacity .3s ease;
+  animation: riseIn .25s var(--ease) both;
+}
+
 /* ==============================================================
    HALAMAN 404
    ============================================================== */
@@ -1164,9 +1180,6 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   animation: fadeUp .4s var(--ease) both;
 }
 .notfound-code span { color: var(--lime); }
-
-/* Logo di dalam judul */
-.hero-bolt { display: inline-block; width: 1em; height: 1em; vertical-align: -.12em; }
 
 /* ==============================================================
    AURORA — lapisan latar bergerak (referensi clariohub.id)

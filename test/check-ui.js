@@ -45,8 +45,11 @@ for (const { html } of pairs) {
 console.log("\n=== 2. HTML: tag wajib ada ===");
 for (const { html } of pairs) {
   const h = read(html);
-  const perlu = ['<!DOCTYPE html>', '<html', '</html>', '<head>', '</head>', '<body>', '</body>'];
+  // <body> sering memakai atribut (class="cc-aurora") sehingga pencocokan string
+  // '<body>' selalu gagal → pakai regex agar mendeteksi tag pembuka apa pun.
+  const perlu = ['<!DOCTYPE html>', '<html', '</html>', '<head>', '</head>', '</body>'];
   const kurang = perlu.filter((t) => !h.includes(t));
+  if (!/<body[\s>]/.test(h)) kurang.push('<body');
   if (kurang.length) { console.log(`  ✗ ${html}: kurang ${kurang.join(", ")}`); error++; }
   else console.log(`  ✓ ${html}`);
 }
@@ -63,7 +66,7 @@ for (const { html, js } of pairs) {
 
   const hilang = [...idsJs].filter((id) => !idsHtml.has(id));
   // id yang dibuat dinamis saat runtime (hasil render) dikecualikan
-  const dinamis = ["copy-new", "st-status", "st-queue", "st-running", "btn-create", "btn-login", "btn-refresh", "btn-reveal", "btn-copy", "btn-logout", "form-login", "form-create", "keys-wrap", "create-result", "login-msg", "panel", "loading", "login-section", "stats", "gw-status", "cards", "status-warn", "uname", "mykey", "curl-example", "py-example", "apikey", "password", "search", "models-wrap", "models-meta", "new-name", "new-limit"];
+  const dinamis = ["copy-new", "st-status", "st-queue", "st-running", "btn-create", "btn-login", "btn-refresh", "btn-reveal", "btn-copy", "btn-logout", "form-login", "form-create", "keys-wrap", "create-result", "login-msg", "panel", "loading", "login-section", "stats", "gw-status", "cards", "status-warn", "uname", "mykey", "curl-example", "py-example", "apikey", "password", "search", "models-wrap", "models-meta", "new-name", "new-limit", "notif-box"];
   const benarBenarHilang = hilang.filter((id) => !dinamis.includes(id));
   if (benarBenarHilang.length) {
     console.log(`  ✗ ${js} → ${html}: id tidak ditemukan: ${benarBenarHilang.join(", ")}`);

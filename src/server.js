@@ -4,6 +4,7 @@
  * Jalankan dengan:  npm start   (atau: node src/server.js)
  */
 const path = require("path");
+const fs = require("fs");
 const express = require("express");
 const config = require("./config");
 const limiter = require("./services/limiter");
@@ -50,8 +51,33 @@ app.use((_req, res, next) => {
   next();
 });
 
-// File statis panel web (HTML/CSS/JS) dari folder public/
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
+
+// Skrip instalasi integrasi (dipakai: bash <(curl -fsSL .../integrasi/claude)
+// dan Windows: irm .../integrasi/claude.ps1 | iex).
+// WAJIB didaftarkan SEBELUM express.static di bawah: jika tidak, static akan
+// mengambil berkas .ps1 lebih dulu dan mengirimnya dengan Content-Type dari
+// ekstensi (application/octet-stream) — merusak `irm | iex`.
+// Selalu dikirim sebagai text/plain agar aman dijalankan lewat pipe.
+const DIR_INTEGRASI = path.join(PUBLIC_DIR, "integrasi");
+app.get("/integrasi/:skrip", (req, res) => {
+  // Izinkan huruf, angka, titik, garis bawah, dan strip. Karakter lain dibuang
+  // agar tidak ada "/" atau ".." yang bisa keluar dari folder (path traversal).
+  const nama = String(req.params.skrip).replace(/[^a-z0-9._-]/gi, "");
+  if (!nama || nama.includes("..")) {
+    return res.status(404).type("text/plain").send("# Skrip integrasi tidak ditemukan.\n");
+  }
+  // Coba nama apa adanya (mis. claude.ps1), lalu dengan akhiran .sh (mis. claude).
+  const berkas = [path.join(DIR_INTEGRASI, nama), path.join(DIR_INTEGRASI, `${nama}.sh`)]
+    .find((b) => fs.existsSync(b) && fs.statSync(b).isFile());
+  if (!berkas) {
+    return res.status(404).type("text/plain").send("# Skrip integrasi tidak ditemukan.\n");
+  }
+  // Berkas skrip kecil (±8 KB), dibaca langsung & dikirim sebagai text/plain.
+  res.type("text/plain; charset=utf-8").send(fs.readFileSync(berkas));
+});
+
+// File statis panel web (HTML/CSS/JS) dari folder public/
 // Aset statis dengan strategi cache berbeda per jenis berkas:
 //  - Ikon/logo (jarang berubah) → cache lama + immutable
 //  - CSS/JS/HTML → selalu revalidasi via ETag (max-age=0) agar update langsung terlihat
@@ -74,26 +100,14 @@ app.use(
 // /portal → portal.html bila ada, jika belum ada → login-member.html
 app.get("/admin", (_req, res) => {
   const panel = path.join(PUBLIC_DIR, "admin.html");
-  res.sendFile(require("fs").existsSync(panel) ? panel : path.join(PUBLIC_DIR, "login-admin.html"));
+  res.sendFile(fs.existsSync(panel) ? panel : path.join(PUBLIC_DIR, "login-admin.html"));
 });
 app.get("/portal", (_req, res) => {
   const panel = path.join(PUBLIC_DIR, "portal.html");
-  res.sendFile(require("fs").existsSync(panel) ? panel : path.join(PUBLIC_DIR, "login-member.html"));
+  res.sendFile(fs.existsSync(panel) ? panel : path.join(PUBLIC_DIR, "login-member.html"));
 });
 app.get("/docs", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "docs.html"));
-});
-
-// Skrip instalasi integrasi (dipanggil via: bash <(curl -fsSL .../integrasi/claude))
-// Content-Type text/plain agar aman dijalankan lewat process substitution.
-app.get("/integrasi/:skrip", (req, res) => {
-  const nama = String(req.params.skrip).replace(/[^a-z0-9_-]/gi, "");
-  const berkas = path.join(PUBLIC_DIR, "integrasi", `${nama}.sh`);
-  const fs = require("fs");
-  if (!fs.existsSync(berkas)) {
-    return res.status(404).type("text/plain").send("# Skrip integrasi tidak ditemukan.\n");
-  }
-  res.type("text/plain; charset=utf-8").sendFile(berkas);
 });
 
 // Log ringkas setiap request

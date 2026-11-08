@@ -262,11 +262,16 @@
         const outer = brand.slice(0, half);
         const inner = brand.slice(half);
         const a = (i, n) => (360 / n) * i;
+        // Ring dalam digeser setengah langkah (interleave). Tanpa pergeseran ini,
+        // kedua ring mulai dari sudut 0° sehingga simpul dalam & luar menumpuk
+        // (jarak radial hanya ~0.3×R, lebih kecil dari lebar dua simpul).
+        const offset = inner.length ? 180 / inner.length : 0;
+        const ai = (i, n) => a(i, n) + offset;
         $("orbit-ring").innerHTML = outer
           .map((v, i) => window.simpulOrbit(v, a(i, outer.length), false))
           .join("");
         $("orbit-ring-rev").innerHTML = inner
-          .map((v, i) => window.simpulOrbit(v, a(i, inner.length), true))
+          .map((v, i) => window.simpulOrbit(v, ai(i, inner.length), true))
           .join("");
       } catch {
         $("live-models").textContent = "—";

@@ -471,6 +471,8 @@ $("btn-logout").onclick = async (e) => {
   showLogin();
 };
 
+
+
 // ---- Login member ----
 $("form-login").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -500,4 +502,5 @@ $("form-login").addEventListener("submit", async (e) => {
   }
 });
 
-boot();
+// Tangkap error boot() agar tidak menjadi "unhandled promise rejection".
+boot().catch(() => showLogin());

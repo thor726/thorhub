@@ -74,19 +74,20 @@ const MODELS = [
 /** Daftar vendor unik (untuk filter di UI), urut sesuai kemunculan. */
 const VENDORS = [...new Set(MODELS.map((m) => m.vendor))];
 
-/** Cari entri model berdasarkan id. */
-function findModel(id) {
-  return MODELS.find((m) => m.id === id) || null;
-}
-
-/** Cek apakah id model dikenal (dipakai untuk validasi request). */
-function isKnownModel(id) {
-  return MODELS.some((m) => m.id === id);
-}
-
 /** Hanya model yang aktif & tersedia. */
 function activeModels() {
   return MODELS.filter((m) => m.active);
+}
+
+/**
+ * Ambil multiplier konsumsi token sebuah model (default 1 bila tak dikenal).
+ * Dipakai oleh proxy untuk menghitung token efektif yang dipotong dari kuota:
+ *   (prompt_tokens + completion_tokens) × multiplier, lalu dibulatkan.
+ */
+function multiplierOf(id) {
+  if (!id) return 1;
+  const m = MODELS.find((x) => x.id === id);
+  return m && Number.isFinite(m.multiplier) ? m.multiplier : 1;
 }
 
 /**
@@ -120,8 +121,7 @@ module.exports = {
   DEFAULT_MODEL,
   MODELS,
   VENDORS,
-  findModel,
-  isKnownModel,
   activeModels,
+  multiplierOf,
   normalizeProviderModels,
 };

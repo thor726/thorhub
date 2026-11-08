@@ -71,6 +71,98 @@ function toast(el, msg, ok = true) {
   if (ok) setTimeout(() => { el.innerHTML = ""; }, 6000);
 }
 
+/**
+ * notif(msg, ok) — notifikasi ringkas melayang di kanan atas.
+ * Dipakai sebagai pengganti window.alert(): tampil, lalu hilang sendiri
+ * tanpa memblokir alur kerja panel.
+ */
+function notif(msg, ok = true) {
+  let box = document.getElementById("notif-box");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "notif-box";
+    box.className = "notif-box";
+    document.body.appendChild(box);
+  }
+  const item = document.createElement("div");
+  item.className = `alert ${ok ? "ok" : "err"}`;
+  item.style.margin = "0";
+  item.textContent = String(msg);
+  box.appendChild(item);
+  setTimeout(() => {
+    item.style.opacity = "0";
+    setTimeout(() => item.remove(), 300);
+  }, ok ? 4000 : 6000);
+}
+
+/**
+ * tanya(opts) — dialog konfirmasi / input kustom (pengganti window.confirm & prompt).
+ *
+ * Mengembalikan Promise:
+ *   • false            → pengguna menekan Batal / Esc / klik latar
+ *   • true             → pengguna menekan tombol konfirmasi (tanpa input)
+ *   • string           → isi field bila opts.input diisi
+ *
+ * opts: { judul, pesan, ok='Lanjutkan', batal='Batal', input=null|'text'|'number',
+ *         nilaiAwal='', bahaya=false }
+ */
+function tanya(opts = {}) {
+  const { judul = "Konfirmasi", pesan = "", ok = "Lanjutkan", batal = "Batal",
+          input = null, nilaiAwal = "", bahaya = false } = opts;
+  return new Promise((resolve) => {
+    const back = document.createElement("div");
+    back.className = "modal-back";
+    back.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-label="${esc(judul)}">
+        <div class="modal-head"><h2>${esc(judul)}</h2></div>
+        ${pesan ? `<p style="margin:0 0 var(--s-3);color:var(--text-body);font-size:14px">${esc(pesan)}</p>` : ""}
+        ${input ? `<input class="dlg-input" type="${input === "number" ? "number" : "text"}" value="${esc(nilaiAwal)}" />` : ""}
+        <div class="dlg-err"></div>
+        <div class="row-actions" style="justify-content:flex-end;margin-top:var(--s-4)">
+          <button class="btn small" data-dlg="batal">${esc(batal)}</button>
+          <button class="btn small ${bahaya ? "danger" : "primary"}" data-dlg="ok">${esc(ok)}</button>
+        </div>
+      </div>`;
+
+    const field = back.querySelector(".dlg-input");
+    const errBox = back.querySelector(".dlg-err");
+
+    function selesai(nilai) {
+      document.removeEventListener("keydown", onKey);
+      back.remove();
+      resolve(nilai);
+    }
+    function konfirmasi() {
+      if (input === "number") {
+        const n = Number(field.value);
+        if (!Number.isInteger(n) || n <= 0) {
+          errBox.innerHTML = '<div class="alert err">Masukkan bilangan bulat positif.</div>';
+          field.focus();
+          return;
+        }
+        return selesai(n);
+      }
+      selesai(input ? field.value.trim() : true);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") selesai(false);
+      if (e.key === "Enter" && input) { e.preventDefault(); konfirmasi(); }
+    }
+
+    back.addEventListener("click", (e) => {
+      if (e.target === back) return selesai(false);      // klik latar = batal
+      const aksi = e.target.closest("[data-dlg]")?.dataset.dlg;
+      if (aksi === "ok") konfirmasi();
+      if (aksi === "batal") selesai(false);
+    });
+    document.addEventListener("keydown", onKey);
+
+    document.body.appendChild(back);
+    (field || back.querySelector('[data-dlg="ok"]')).focus();
+    if (field) field.select();
+  });
+}
+
 async function boot() {
   try {
     const r = await fetch(API + "/me", { credentials: "same-origin" });
@@ -330,10 +422,14 @@ $("keys-wrap").addEventListener("click", async (e) => {
       btn.innerHTML = "✓";
       setTimeout(() => (btn.innerHTML = asli), 1200);
     } else if (act === "topup") {
-      const amount = prompt("Tambah kuota token sebesar:", "1000000");
-      if (amount === null) return;
-      const n = Number(amount);
-      if (!Number.isInteger(n) || n <= 0) return alert("Masukkan bilangan bulat positif.");
+      const n = await tanya({
+        judul: "Top-up Kuota",
+        pesan: "Tambahkan kuota token untuk key ini:",
+        input: "number",
+        nilaiAwal: "1000000",
+        ok: "Tambah",
+      });
+      if (!n) return;
       const keys = await api("/keys");
       const k = keys.find((x) => x.api_key === apiKey);
       await api(`/keys/${encodeURIComponent(apiKey)}`, {
@@ -352,16 +448,28 @@ $("keys-wrap").addEventListener("click", async (e) => {
       await bukaDetail(apiKey, tr.querySelector("td:nth-child(2)").textContent);
     } else if (act === "reset") {
       const nama = tr.querySelector("td:nth-child(2)").textContent;
-      if (!confirm(`Nol-kan pemakaian token untuk "${nama}"?\n\nLog aktivitas TETAP disimpan.`)) return;
+      const ya = await tanya({
+        judul: "Reset Pemakaian",
+        pesan: `Nol-kan pemakaian token untuk "${nama}"? Log aktivitas TETAP disimpan.`,
+        ok: "Reset",
+      });
+      if (!ya) return;
       await api(`/keys/${encodeURIComponent(apiKey)}/reset`, { method: "POST", body: JSON.stringify({}) });
       await loadAll();
     } else if (act === "del") {
-      if (!confirm(`Hapus permanen key untuk "${tr.querySelector("td:nth-child(2)").textContent}"?\n\nLog pemakaiannya juga akan dihapus.`)) return;
+      const nama = tr.querySelector("td:nth-child(2)").textContent;
+      const ya = await tanya({
+        judul: "Hapus API Key",
+        pesan: `Hapus permanen key untuk "${nama}"? Log pemakaiannya juga akan dihapus. Tindakan ini tidak bisa dibatalkan.`,
+        ok: "Hapus",
+        bahaya: true,
+      });
+      if (!ya) return;
       await api(`/keys/${encodeURIComponent(apiKey)}`, { method: "DELETE" });
       await loadAll();
     }
   } catch (err) {
-    if (err.message !== "unauthorized") alert(err.message);
+    if (err.message !== "unauthorized") notif(err.message, false);
   }
 });
 
@@ -394,7 +502,7 @@ $("form-create").addEventListener("submit", async (e) => {
   }
 });
 
-$("btn-refresh").onclick = () => loadAll().catch((e) => { if (e.message !== "unauthorized") alert(e.message); });
+$("btn-refresh").onclick = () => loadAll().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); });
 $("btn-logout").onclick = async (e) => {
   e.preventDefault();
   await fetch(API + "/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
@@ -429,4 +537,6 @@ $("modal-close").onclick = tutupModal;
 $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") tutupModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") tutupModal(); });
 
-boot();
+// Jalankan boot dengan penangkap error: bila ada promise yang gagal, tampilkan
+// form login alih-alih membiarkan "unhandled promise rejection" mematikan alur.
+boot().catch(() => showLogin());

@@ -15,6 +15,7 @@ const { pipeline } = require("stream/promises");
 const config = require("../config");
 const db = require("../db");
 const limiter = require("./limiter");
+const models = require("../lib/models");
 
 // Prepared statement: dibuat sekali, cepat & bebas SQL injection
 const stmtAddUsage = db.prepare("UPDATE api_keys SET tokens_used = tokens_used + ? WHERE id = ?");
@@ -23,9 +24,6 @@ const stmtLogUsage = db.prepare(
   `INSERT INTO usage_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, status)
    VALUES (?, ?, ?, ?, ?, ?)`
 );
-
-/** Endpoint yang TIDAK dihitung tokennya (bukan generasi teks). */
-const ENDPOINT_TANPA_TOKEN = new Set(["/messages/count_tokens"]);
 
 /** Error yang membawa status + body dari provider (diteruskan apa adanya). */
 class UpstreamError extends Error {
@@ -103,15 +101,24 @@ function extractTokenParts(usage) {
 
 /**
  * Tambahkan pemakaian token pembeli ke database + catat ke log pemakaian.
- * @param {object} subKey  baris api_keys milik pembeli
- * @param {number} total   token yang dipotong dari kuota (sudah dikali multiplier model)
+ *
+ * Rumus resmi (lihat dokumentasi): token efektif yang dipotong dari kuota =
+ *   (prompt_tokens + completion_tokens) × multiplier model, lalu dibulatkan.
+ *
+ * @param {object} subKey     baris api_keys milik pembeli
+ * @param {number} totalMentah total token MENTAH dari provider (belum dikali multiplier)
  * @param {{model?:string, prompt?:number, completion?:number, status?:string}} info  detail untuk log
  */
-function countTokens(subKey, total, info = {}) {
+function countTokens(subKey, totalMentah, info = {}) {
   const model = info.model || null;
   const prompt = Number.isFinite(info.prompt) ? info.prompt : 0;
   const completion = Number.isFinite(info.completion) ? info.completion : 0;
   const status = info.status || "ok";
+
+  // Terapkan multiplier model → inilah token efektif yang mengurangi kuota.
+  // Model tak dikenal otomatis bernilai 1 (tidak ada penalti tersembunyi).
+  const multiplier = models.multiplierOf(model);
+  const total = Math.round((Number.isFinite(totalMentah) ? totalMentah : 0) * multiplier);
 
   if (!total || total <= 0) {
     // Tetap catat kejadiannya supaya member bisa melihat request yang tidak tercatat tokennya
@@ -129,8 +136,9 @@ function countTokens(subKey, total, info = {}) {
     console.error("[token] gagal menulis usage_logs:", e.message);
   }
   const updated = stmtGetKeyById.get(subKey.id);
+  const kali = multiplier !== 1 ? ` (${totalMentah}×${multiplier})` : "";
   console.log(
-    `[token] ${subKey.api_key.slice(0, 16)}… (${subKey.user_name}) +${total} token [${model || "?"}] → ${updated.tokens_used}/${updated.token_limit}`
+    `[token] ${subKey.api_key.slice(0, 16)}… (${subKey.user_name}) +${total} token${kali} [${model || "?"}] → ${updated.tokens_used}/${updated.token_limit}`
   );
 }
 
