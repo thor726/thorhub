@@ -87,19 +87,15 @@ app.get("/integrasi/:skrip", (req, res) => {
 });
 
 // File statis panel web (HTML/CSS/JS) dari folder public/
-// Aset statis dengan strategi cache berbeda per jenis berkas:
-//  - Ikon/logo (jarang berubah) → cache lama + immutable
-//  - CSS/JS/HTML → selalu revalidasi via ETag (max-age=0) agar update langsung terlihat
-//    namun tetap hemat bandwidth lewat respons 304 Not Modified.
-const CACHE_IKON = "public, max-age=2592000, immutable"; // 30 hari
+// SEMUA aset (termasuk logo/ikon/manifest) selalu revalidasi via ETag
+// (max-age=0, must-revalidate): pergantian logo/ikon langsung terlihat
+// semua pengunjung, tetap hemat bandwidth lewat respons 304 Not Modified.
+// (Dulu ikon/logo di-cache immutable 30 hari — akibatnya logo baru tidak
+//  akan pernah terlihat pengunjung lama selama berbulan-bulan.)
 app.use(
   express.static(PUBLIC_DIR, {
-    setHeaders(res, berkas) {
-      if (/\.(png|svg|webmanifest)$/i.test(berkas)) {
-        res.setHeader("Cache-Control", CACHE_IKON);
-      } else {
-        res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
-      }
+    setHeaders(res) {
+      res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
     },
   })
 );
