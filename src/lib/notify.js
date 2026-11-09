@@ -42,8 +42,24 @@ function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Domain produksi bawaan — dipakai bila PUBLIC_BASE_URL kosong di .env. */
+const DOMAIN_BAWAAN = "https://llm.thormarket.site";
+
+/**
+ * Kumpulan tautan toko untuk pesan WA/email:
+ *  base   → "https://llm.thormarket.site"
+ *  api    → "https://llm.thormarket.site/v1"   (Base URL untuk klien API)
+ *  portal → "https://llm.thormarket.site/portal" (dashboard member)
+ * Bila PUBLIC_BASE_URL diisi di .env, nilainya yang dipakai sebagai base.
+ */
+function tautanToko() {
+  const base = String(require("../config").publicBaseUrl || DOMAIN_BAWAAN).replace(/\/+$/, "");
+  return { base, api: `${base}/v1`, portal: `${base}/portal` };
+}
+
 /** Susun HTML struk email (memuat API KEY — diminta pemilik toko). */
 function buildEmailHtml(order) {
+  const t = tautanToko();
   const isNew = order.mode === "key_baru";
   const barisKey = isNew
     ? `<tr>
@@ -91,10 +107,14 @@ function buildEmailHtml(order) {
         </table>
         <p style="margin:0 0 18px;font-size:15px;font-weight:bold;color:#111827;text-align:right;">Total Dibayar: <span style="color:#d97706;">${rupiah(order.amount_to_pay)}</span></p>
         <div style="margin:0 0 18px;padding:16px;border:1px dashed #a3e635;border-radius:12px;background:#f7fee7;">
-          <p style="margin:0;font-size:13px;color:#3f6212;line-height:1.7;">
+          <p style="margin:0;font-size:13px;color:#3f6212;line-height:1.8;">
             ${isNew
-              ? "Aktifkan di mana saja: masuk ke <b>thormarket.site/portal</b> dengan API Key di atas, atau pakai langsung di header <b>Authorization: Bearer &lt;key&gt;</b>."
-              : "Cek kuota terbaru kapan saja di dashboard member."}
+              ? `Aktifkan key Anda:<br>
+                • API Base URL: <code style="background:#ecfccb;padding:2px 6px;border-radius:6px;">${esc(t.api)}</code><br>
+                • Dashboard member: <a href="${esc(t.portal)}" style="color:#3f6212;font-weight:bold;">${esc(t.portal)}</a> — masuk dengan API Key di atas<br>
+                • Cara pakai: header <b>Authorization: Bearer &lt;key&gt;</b> ke Base URL di atas.`
+              : `Cek kuota terbaru kapan saja di dashboard member:<br>
+                <a href="${esc(t.portal)}" style="color:#3f6212;font-weight:bold;">${esc(t.portal)}</a>.`}
             <br><b>Jaga kerahasiaan key Anda</b> — siapa pun yang memegang key memakai kuota Anda.
           </p>
         </div>
@@ -129,10 +149,9 @@ async function sendEmail(apiKey, from, to, subject, html) {
   }
 }
 
-/** Susun pesan WhatsApp untuk pembeli. */
+/** Susun pesan WhatsApp untuk pembeli (termasuk Base URL & dashboard member). */
 function pesanWaPembeli(order) {
-  const base = (require("../config").publicBaseUrl || "").replace(/\/+$/, "");
-  const linkPortal = base ? `${base}/portal` : "halaman /portal";
+  const t = tautanToko();
   if (order.mode === "key_baru") {
     return [
       `✅ *Pembayaran diterima — ThorHub*`,
@@ -143,8 +162,9 @@ function pesanWaPembeli(order) {
       `\`${order.api_key_issued}\``,
       ``,
       `• Kuota: ${order.quota_tokens.toLocaleString("id-ID")} token`,
-      `• Masuk dashboard: ${linkPortal} (pakai API Key sebagai login)`,
-      `• Cara pakai: header \`Authorization: Bearer <key>\``,
+      `• *Base URL:* \`${t.api}\``,
+      `• *Dashboard member:* ${t.portal}`,
+      `• Cara pakai: kirim request ke Base URL di atas dengan header \`Authorization: Bearer <key>\``,
       ``,
       `_Simpan pesan ini — jangan bagikan key ke siapa pun._`,
     ].join("\n");
@@ -157,6 +177,9 @@ function pesanWaPembeli(order) {
     `• Key: \`${order.target_api_key.slice(0, 18)}…\``,
     `• Tambahan: +${order.quota_tokens.toLocaleString("id-ID")} token`,
     `• Total dibayar: ${rupiah(order.amount_to_pay)}`,
+    ``,
+    `• *Base URL:* \`${t.api}\``,
+    `• *Dashboard member:* ${t.portal}`,
     ``,
     `_Terima kasih sudah memakai ThorHub!_`,
   ].join("\n");
@@ -229,4 +252,4 @@ async function notifyAdminNewOrder(order) {
   return sendWhatsApp(cfg.fonnteToken, cfg.adminWa, teks);
 }
 
-module.exports = { sendWhatsApp, sendEmail, kirimNotifikasiLunas, notifyAdminNewOrder, pesanWaPembeli, rupiah };
+module.exports = { sendWhatsApp, sendEmail, kirimNotifikasiLunas, notifyAdminNewOrder, pesanWaPembeli, buildEmailHtml, rupiah };
