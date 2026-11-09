@@ -134,7 +134,10 @@ app.get("/beli", (_req, res) => {
 // boleh ditimpa halaman (mis. GET /admin/keys → JSON, bukan admin.html).
 // ---------------------------------------------------------------
 const HALAMAN_SLUG = {
-  portal: { berkas: "portal.html", slug: new Set(["topup", "pesanan", "pemakaian", "model", "log"]), api: new Set(["member", "admin"]) },
+  // "api:" = segmen pertama endpoint REST asli di bawah prefix ini (router
+  // portal.js: /portal/member/*, /portal/admin/*, /portal/models) yang tidak
+  // boleh ditimpa halaman. /portal/models penting: dipakai katalog docs.
+  portal: { berkas: "portal.html", slug: new Set(["topup", "pesanan", "pemakaian", "model", "log"]), api: new Set(["member", "admin", "models", "usage"]) },
   admin: { berkas: "admin.html", slug: new Set(["aktivitas", "model", "toko"]), api: new Set(["keys", "usage"]) },
   docs: { berkas: "docs.html", slug: new Set(["mulai", "sdk", "aplikasi", "referensi"]), api: new Set() },
   beli: { berkas: "beli.html", slug: new Set(["topup", "pembayaran", "selesai"]), api: new Set() },
