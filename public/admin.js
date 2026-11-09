@@ -104,11 +104,11 @@ function notif(msg, ok = true) {
  *   • string           → isi field bila opts.input diisi
  *
  * opts: { judul, pesan, ok='Lanjutkan', batal='Batal', input=null|'text'|'number',
- *         nilaiAwal='', bahaya=false }
+ *         nilaiAwal='', placeholder='', bahaya=false }
  */
 function tanya(opts = {}) {
   const { judul = "Konfirmasi", pesan = "", ok = "Lanjutkan", batal = "Batal",
-          input = null, nilaiAwal = "", bahaya = false } = opts;
+          input = null, nilaiAwal = "", placeholder = "", bahaya = false } = opts;
   return new Promise((resolve) => {
     const back = document.createElement("div");
     back.className = "modal-back";
@@ -116,7 +116,7 @@ function tanya(opts = {}) {
       <div class="modal" role="dialog" aria-modal="true" aria-label="${esc(judul)}">
         <div class="modal-head"><h2>${esc(judul)}</h2></div>
         ${pesan ? `<p style="margin:0 0 var(--s-3);color:var(--text-body);font-size:14px">${esc(pesan)}</p>` : ""}
-        ${input ? `<input class="dlg-input" type="${input === "number" ? "number" : "text"}" value="${esc(nilaiAwal)}" />` : ""}
+        ${input ? `<input class="dlg-input" type="${input === "number" ? "number" : "text"}" value="${esc(nilaiAwal)}" placeholder="${esc(placeholder)}" />` : ""}
         <div class="dlg-err"></div>
         <div class="row-actions" style="justify-content:flex-end;margin-top:var(--s-4)">
           <button class="btn small" data-dlg="batal">${esc(batal)}</button>
@@ -640,49 +640,87 @@ $("btn-nt-simpan").addEventListener("click", async () => {
   }
 });
 
-/** Muat & render daftar pesanan + riwayat webhook. */
+// ================================================================
+// PELACAKAN PESANAN (ala toko online): filter status, pencarian,
+// paginasi, statistik, modal detail + linimasa + aksi admin.
+// ================================================================
+const LABEL_STATUS = { PENDING: "Menunggu Bayar", PAID: "Dibayar", COMPLETED: "Selesai", CANCELLED: "Batal" };
+const TAG_STATUS = { PENDING: "warn", PAID: "info", COMPLETED: "ok", CANCELLED: "plain" };
+const ORDERS = { status: "", q: "", offset: 0, limit: 25, total: 0 };
+
+const tagStatus = (s) =>
+  `<span class="tag ${TAG_STATUS[s] || "plain"}">${LABEL_STATUS[s] || esc(s)}</span>`;
+
+/** Muat & render daftar pesanan + statistik + riwayat webhook. */
 async function loadOrders() {
-  const d = await api("/orders?limit=100");
+  const p = new URLSearchParams();
+  if (ORDERS.status) p.set("status", ORDERS.status);
+  if (ORDERS.q) p.set("q", ORDERS.q);
+  p.set("limit", String(ORDERS.limit));
+  p.set("offset", String(ORDERS.offset));
+  const d = await api("/orders?" + p.toString());
+  if (!loggedIn) return;
+  ORDERS.total = d.paging?.total ?? (d.orders || []).length;
+
+  // Statistik toko ala dashboard
+  const st = d.stats || {};
+  const statsEl = $("toko-stats");
+  if (statsEl) {
+    statsEl.innerHTML = `
+      <div class="stat"><div class="k">Pesanan Hari Ini</div><div class="v">${num(st.pesanan_hari_ini || 0)}</div></div>
+      <div class="stat"><div class="k">Menunggu Bayar</div><div class="v">${num(st.menunggu_bayar || 0)}</div></div>
+      <div class="stat"><div class="k">Omzet Hari Ini</div><div class="v" style="font-size:17px">${rupiahIDR(st.omzet_hari_ini || 0)}</div></div>
+      <div class="stat"><div class="k">Total Omzet Lunas</div><div class="v" style="font-size:17px">${rupiahIDR(st.omzet_lunas || 0)}</div></div>`;
+  }
+
   const rows = d.orders || [];
   const tb = $("tbody-orders");
   if (!rows.length) {
-    tb.innerHTML = '<tr><td colspan="8" class="muted">Belum ada pesanan.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8" class="muted">Tidak ada pesanan yang cocok.</td></tr>';
   } else {
     tb.innerHTML = rows
       .map((o) => {
-        const tag =
-          o.status === "COMPLETED" ? "ok" :
-          o.status === "PAID" ? "ok" :
-          o.status === "PENDING" ? "warn" : "off";
+        const lewat = o.expires_at && o.expires_at < Date.now();
         return `<tr>
-          <td class="mono">${esc(o.order_code)}</td>
+          <td class="mono"><b>${esc(o.order_code)}</b></td>
           <td>${esc(o.user_name)}<div class="muted" style="font-size:11.5px">${esc(o.email || "")}${o.whatsapp ? " · " + esc(o.whatsapp) : ""}</div></td>
           <td>${kek(o.quota_tokens)} token</td>
-          <td class="num on">${rupiahIDR(o.amount_to_pay)}<div class="muted" style="font-size:11.5px">unik +${o.unique_code}</div></td>
+          <td class="num on">${rupiahIDR(o.amount_to_pay)}<div class="muted" style="font-size:11.5px">unik +${o.unique_code}${lewat && o.status === "PENDING" ? " · <span style='color:var(--red)'>tagihan lewat</span>" : ""}</div></td>
           <td>${o.mode === "key_baru" ? "Key baru" : "Top-up"}</td>
-          <td><span class="tag ${tag}">${esc(o.status)}</span></td>
+          <td>${tagStatus(o.status)}</td>
           <td class="mono muted">${esc(o.created_at)}</td>
           <td style="white-space:nowrap">
-            ${o.status === "PENDING" || o.status === "CANCELLED" ? `<button class="btn small" data-ord="${esc(o.order_code)}" data-act="konfirmasi">Lunas?</button>` : ""}
-            ${o.api_key_issued ? `<button class="btn small" data-ord="${esc(o.order_code)}" data-act="lihat-key">Lihat Key</button>` : ""}
+            <button class="btn small" data-ord="${esc(o.order_code)}" data-act="detail">Detail</button>
+            ${o.status === "PENDING" || o.status === "CANCELLED" ? `<button class="btn small primary" data-ord="${esc(o.order_code)}" data-act="konfirmasi">Lunas?</button>` : ""}
+            ${o.status === "PENDING" ? `<button class="btn small" data-ord="${esc(o.order_code)}" data-act="batal">Batal</button>` : ""}
+            ${o.status === "COMPLETED" ? `<button class="btn small" data-ord="${esc(o.order_code)}" data-act="kirim-ulang">Kirim Ulang</button>` : ""}
           </td>
         </tr>`;
       })
       .join("");
   }
 
+  // Info halaman + pager
+  const dari = ORDERS.total === 0 ? 0 : ORDERS.offset + 1;
+  const sampai = Math.min(ORDERS.offset + ORDERS.limit, ORDERS.total);
+  $("orders-pageinfo").textContent = `Menampilkan ${dari}–${sampai} dari ${ORDERS.total} pesanan${ORDERS.q ? ` (pencarian: "${ORDERS.q}")` : ""}`;
+  $("btn-orders-prev").disabled = ORDERS.offset <= 0;
+  $("btn-orders-next").disabled = sampai >= ORDERS.total;
+
+  // Riwayat notifikasi DANA
   const ev = d.events || [];
   const te = $("tbody-events");
   if (!ev.length) {
-    te.innerHTML = '<tr><td colspan="5" class="muted">Belum ada notifikasi DANA masuk.</td></tr>';
+    te.innerHTML = '<tr><td colspan="6" class="muted">Belum ada notifikasi DANA masuk.</td></tr>';
   } else {
     te.innerHTML = ev
       .map(
         (e) => `<tr>
           <td class="mono muted">${esc(e.created_at)}</td>
           <td class="num">${e.amount ? rupiahIDR(e.amount) : "—"}</td>
-          <td class="mono">${esc(e.order_code || "—")}</td>
+          <td class="mono">${e.order_code ? esc(e.order_code) : "—"}</td>
           <td>${e.matched ? '<span class="tag ok">ya</span>' : '<span class="tag off">tidak</span>'}</td>
+          <td class="mono muted" style="font-size:11.5px">${esc(e.ip || "—")}</td>
           <td class="muted" style="font-size:12px;word-break:break-word">${esc(e.note || "")}</td>
         </tr>`
       )
@@ -690,13 +728,165 @@ async function loadOrders() {
   }
 }
 
-/** Aksi pada tabel pesanan (konfirmasi manual / lihat key). */
+/* ---------- Modal detail pesanan: info + linimasa + log DANA + aksi ---------- */
+const TL_LABEL = {
+  dibuat: "Pesanan dibuat",
+  webhook: "Notifikasi DANA",
+  lunas: "Pembayaran diterima",
+  fulfillment: "Eksekusi pesanan",
+  notifikasi: "Pengiriman key & struk",
+  admin: "Aksi admin",
+  batal: "Dibatalkan",
+  info: "Catatan",
+};
+
+function renderTimeline(items) {
+  if (!items || !items.length) {
+    return '<p class="muted" style="margin:8px 0 0">Belum ada linimasa.</p>';
+  }
+  return `<div class="timeline">${items
+    .map(
+      (e) => `<div class="tl-item">
+        <span class="tl-dot ${esc(e.type)}"></span>
+        <div class="tl-head">
+          <b>${TL_LABEL[e.type] || esc(e.type)}</b>
+          <span class="tag plain">${esc(e.actor)}</span>
+          <span class="mono muted" style="font-size:11px;margin-left:auto">${esc(e.created_at)}</span>
+        </div>
+        <div class="tl-detail">${esc(e.detail)}</div>
+      </div>`
+    )
+    .join("")}</div>`;
+}
+
+async function bukaDetailOrder(kode) {
+  const modal = $("modal");
+  $("modal-title").textContent = "Pesanan " + kode;
+  $("modal-body").innerHTML = '<div class="loading-box"><span class="spinner sm"></span> memuat detail…</div>';
+  modal.classList.remove("hidden");
+  try {
+    const d = await api(`/orders/${encodeURIComponent(kode)}`);
+    const o = d.order;
+    const lewat = o.expires_at && o.expires_at < Date.now();
+
+    const info = `
+      <div class="kv">
+        <div class="kv-row"><span>Pembeli</span><b>${esc(o.user_name)}</b></div>
+        <div class="kv-row"><span>Kontak</span><b>${esc(o.whatsapp || "—")}${o.email ? " · " + esc(o.email) : ""}</b></div>
+        <div class="kv-row"><span>Paket</span><b>${num(o.quota_tokens)} token · ${o.mode === "key_baru" ? "Key baru" : "Top-up"}</b></div>
+        <div class="kv-row"><span>Tagihan</span><b>${rupiahIDR(o.base_amount)} + unik ${o.unique_code} = <span class="ok">${rupiahIDR(o.amount_to_pay)}</span></b></div>
+        <div class="kv-row"><span>Metode</span><b>${esc(o.payment_method)}</b></div>
+        <div class="kv-row"><span>Status</span><b>${tagStatus(o.status)}</b></div>
+        ${o.mode === "key_baru" && o.api_key_issued ? `<div class="kv-row"><span>Key Terbit</span><b class="ok" style="word-break:break-all">${esc(o.api_key_issued)}</b></div>` : ""}
+        ${o.mode === "topup" ? `<div class="kv-row"><span>Key Target</span><b style="word-break:break-all">${esc(o.target_api_key)}</b></div>` : ""}
+        <div class="kv-row"><span>Dibuat</span><b>${esc(o.created_at)}</b></div>
+        ${o.paid_at ? `<div class="kv-row"><span>Dibayar</span><b>${esc(o.paid_at)}</b></div>` : ""}
+        ${o.completed_at ? `<div class="kv-row"><span>Selesai</span><b>${esc(o.completed_at)}</b></div>` : ""}
+        <div class="kv-row"><span>Tagihan Berlaku</span><b>${new Date(o.expires_at).toLocaleString("id-ID")}${lewat && o.status === "PENDING" ? ' <span class="tag off">lewat</span>' : ""}</b></div>
+        ${o.note ? `<div class="kv-row"><span>Catatan</span><b>${esc(o.note)}</b></div>` : ""}
+      </div>`;
+
+    const logDana = (d.events || [])
+      .map(
+        (e) => `<tr>
+          <td class="mono muted" style="font-size:11.5px">${esc(e.created_at)}</td>
+          <td class="num">${e.amount ? rupiahIDR(e.amount) : "—"}</td>
+          <td>${e.matched ? '<span class="tag ok">ya</span>' : '<span class="tag off">tidak</span>'}</td>
+          <td class="muted" style="font-size:12px;word-break:break-word">${esc(e.note || e.raw_text || "")}</td>
+        </tr>`
+      )
+      .join("");
+
+    $("modal-body").innerHTML = `
+      ${info}
+      <h3 style="margin:18px 0 4px;font-size:14px">Linimasa Pesanan</h3>
+      ${renderTimeline(d.timeline)}
+      <h3 style="margin:18px 0 4px;font-size:14px">Notifikasi DANA Terkait</h3>
+      <div class="table-scroll">
+        <table class="models-table">
+          <thead><tr><th>Waktu</th><th class="num">Nominal</th><th>Cocok</th><th>Catatan</th></tr></thead>
+          <tbody>${logDana || '<tr><td colspan="4" class="muted">Belum ada notifikasi DANA untuk pesanan ini.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="row-actions" style="margin-top:16px;flex-wrap:wrap">
+        ${o.status === "PENDING" || o.status === "CANCELLED" ? `<button class="btn small primary" data-mact="konfirmasi" data-kode="${esc(o.order_code)}">Tandai Lunas</button>` : ""}
+        ${o.status === "PENDING" ? `<button class="btn small" data-mact="batal" data-kode="${esc(o.order_code)}">Batalkan</button>` : ""}
+        ${o.status === "COMPLETED" ? `<button class="btn small" data-mact="kirim-ulang" data-kode="${esc(o.order_code)}">Kirim Ulang Notifikasi</button>` : ""}
+        ${o.api_key_issued ? `<button class="btn small" data-mact="salin-key" data-kode="${esc(o.order_code)}">Salin Key</button>` : ""}
+      </div>
+      <div id="modal-order-msg"></div>`;
+  } catch (err) {
+    if (err.message !== "unauthorized") $("modal-body").innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
+  }
+}
+
+/** Aksi di dalam modal detail (tanda lunas / batal / kirim ulang / salin key). */
+$("modal-body").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-mact]");
+  if (!btn) return;
+  const kode = btn.dataset.kode;
+  const box = $("modal-order-msg");
+  try {
+    if (btn.dataset.mact === "salin-key") {
+      const d = await api(`/orders/${encodeURIComponent(kode)}`);
+      await navigator.clipboard.writeText(d.order.api_key_issued || "");
+      btn.textContent = "✓ Tersalin";
+      setTimeout(() => (btn.textContent = "Salin Key"), 1500);
+      return;
+    }
+    if (btn.dataset.mact === "konfirmasi") {
+      const alasan = await tanya({
+        judul: "Tandai Lunas (Manual)",
+        pesan: `Konfirmasi pesanan ${kode} sebagai LUNAS — key/kuota langsung dieksekusi & notifikasi dikirim. Lakukan hanya bila dana BENAR-BENAR masuk.`,
+        ok: "Ya, Lunas",
+        input: "text",
+        nilaiAwal: "",
+        placeholderText: "Alasan (mis. cek manual DANA: uang masuk)",
+      });
+      if (alasan === false) return;
+      const r = await api(`/orders/${encodeURIComponent(kode)}/confirm`, { method: "POST", body: JSON.stringify({ alasan }) });
+      notif(r.message || "Pesanan diproses.", r.ok !== false);
+    } else if (btn.dataset.mact === "batal") {
+      const alasan = await tanya({
+        judul: "Batalkan Pesanan",
+        pesan: `Batalkan pesanan ${kode}? Kode unik dilepas dan tagihan QRIS tidak berlaku lagi.`,
+        ok: "Ya, Batal",
+        input: "text",
+        nilaiAwal: "",
+        placeholderText: "Alasan (mis. pembeli minta batal)",
+      });
+      if (alasan === false) return;
+      const r = await api(`/orders/${encodeURIComponent(kode)}/cancel`, { method: "POST", body: JSON.stringify({ alasan }) });
+      notif(r.message || "Pesanan dibatalkan.", true);
+    } else if (btn.dataset.mact === "kirim-ulang") {
+      const ya = await tanya({
+        judul: "Kirim Ulang Notifikasi",
+        pesan: `Kirim ulang key & struk pesanan ${kode} ke pembeli (WA + email, plus notifikasi admin)?`,
+        ok: "Ya, Kirim Ulang",
+      });
+      if (!ya) return;
+      const r = await api(`/orders/${encodeURIComponent(kode)}/resend`, { method: "POST", body: JSON.stringify({}) });
+      notif(r.message || "Pengiriman ulang diproses.", true);
+    }
+    await bukaDetailOrder(kode);
+    await loadOrders();
+  } catch (err) {
+    if (err.message !== "unauthorized") {
+      if (box) box.innerHTML = `<div class="alert err" style="margin-top:10px">${esc(err.message)}</div>`;
+      else notif(err.message, false);
+    }
+  }
+});
+
+/** Aksi pada tabel pesanan (detail / konfirmasi / batal / kirim ulang). */
 $("tbody-orders").addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-act]");
   if (!btn) return;
   const kode = btn.dataset.ord;
   try {
-    if (btn.dataset.act === "konfirmasi") {
+    if (btn.dataset.act === "detail") {
+      await bukaDetailOrder(kode);
+    } else if (btn.dataset.act === "konfirmasi") {
       const ya = await tanya({
         judul: "Konfirmasi Manual",
         pesan: `Tandai pesanan ${kode} sebagai LUNAS dan eksekusi otomatis (terbitkan key / tambah kuota + kirim notifikasi)? Tekan ini hanya bila dana BENAR-BENAR sudah masuk.`,
@@ -706,24 +896,79 @@ $("tbody-orders").addEventListener("click", async (e) => {
       const r = await api(`/orders/${encodeURIComponent(kode)}/confirm`, { method: "POST", body: JSON.stringify({}) });
       notif(r.message || "Pesanan diproses.", r.ok !== false);
       await loadOrders();
-    } else if (btn.dataset.act === "lihat-key") {
-      const d = await api("/orders?limit=100");
-      const o = (d.orders || []).find((x) => x.order_code === kode);
-      if (!o) return;
-      await tanya({
-        judul: "Key Pesanan " + kode,
-        pesan: o.api_key_issued || "(tidak ada key — mode top-up: " + (o.target_api_key || "") + " +" + kek(o.quota_tokens) + " token)",
-        ok: "Tutup",
+    } else if (btn.dataset.act === "batal") {
+      const ya = await tanya({
+        judul: "Batalkan Pesanan",
+        pesan: `Batalkan pesanan ${kode}? Tagihan QRIS tidak berlaku lagi dan kode unik dilepas.`,
+        ok: "Ya, Batal",
       });
+      if (!ya) return;
+      const r = await api(`/orders/${encodeURIComponent(kode)}/cancel`, { method: "POST", body: JSON.stringify({}) });
+      notif(r.message || "Pesanan dibatalkan.", true);
+      await loadOrders();
+    } else if (btn.dataset.act === "kirim-ulang") {
+      const ya = await tanya({
+        judul: "Kirim Ulang Notifikasi",
+        pesan: `Kirim ulang key & struk pesanan ${kode} ke pembeli (WA + email)?`,
+        ok: "Ya, Kirim Ulang",
+      });
+      if (!ya) return;
+      const r = await api(`/orders/${encodeURIComponent(kode)}/resend`, { method: "POST", body: JSON.stringify({}) });
+      notif(r.message || "Pengiriman ulang diproses.", true);
+      await loadOrders();
     }
   } catch (err) {
     if (err.message !== "unauthorized") notif(err.message, false);
   }
 });
 
+/* ---------- Filter, pencarian & paginasi ---------- */
+document.querySelectorAll("[data-ostat]").forEach((chip) => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("[data-ostat]").forEach((c) => c.classList.remove("active"));
+    chip.classList.add("active");
+    ORDERS.status = chip.dataset.ostat;
+    ORDERS.offset = 0;
+    loadOrders().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); });
+  });
+});
+
+function jalankanCari() {
+  ORDERS.q = $("orders-cari").value.trim();
+  ORDERS.offset = 0;
+  loadOrders().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); });
+}
+$("btn-orders-cari").addEventListener("click", jalankanCari);
+$("orders-cari").addEventListener("keydown", (e) => { if (e.key === "Enter") jalankanCari(); });
+
+$("btn-orders-prev").addEventListener("click", () => {
+  ORDERS.offset = Math.max(0, ORDERS.offset - ORDERS.limit);
+  loadOrders().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); });
+});
+$("btn-orders-next").addEventListener("click", () => {
+  ORDERS.offset = ORDERS.offset + ORDERS.limit;
+  loadOrders().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); });
+});
+
 $("btn-orders-refresh").addEventListener("click", () =>
   loadOrders().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); })
 );
+
+// Auto-refresh ringan (15 detik) hanya saat: login, tab toko aktif, halaman
+// terlihat, dan tidak ada modal terbuka — agar pelacakan pembayaran "hidup"
+// tanpa mengganggu aksi admin yang sedang berlangsung.
+let ordersTimer = null;
+function jadwalkanRefreshPesanan() {
+  if (ordersTimer) clearInterval(ordersTimer);
+  ordersTimer = setInterval(() => {
+    if (!loggedIn || document.hidden) return;
+    const tab = document.getElementById("atab-toko");
+    if (!tab || !tab.classList.contains("active")) return;
+    if (!$("modal").classList.contains("hidden")) return;
+    loadOrders().catch(() => {});
+  }, 15000);
+}
+jadwalkanRefreshPesanan();
 
 // ---- Modal ----
 $("modal-close").onclick = tutupModal;

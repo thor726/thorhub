@@ -19,6 +19,10 @@ let paketDipilih = null; // { id, label, tokens, price }
 let pesanan = null; // { kode, token, expires_at, amount }
 let pollTimer = null;
 let countdownTimer = null;
+// Tautan resmi dari server (ikut PUBLIC_BASE_URL bila diisi admin):
+// ditampilkan di halaman sukses agar pembeli tahu Base URL & dashboard.
+let API_BASE = "https://llm.thormarket.site/v1";
+let PORTAL_URL = "https://llm.thormarket.site/portal";
 
 /* ================= Muat katalog paket ================= */
 async function muatPaket() {
@@ -27,6 +31,8 @@ async function muatPaket() {
     const d = await r.json();
     const data = d.data || {};
     PAKET = data.packages || [];
+    if (data.api_base) API_BASE = data.api_base;
+    if (data.portal_url) PORTAL_URL = data.portal_url;
     if (!data.store_ready) {
       $("toko-status").innerHTML =
         '<div class="alert warn">Toko sedang <b>ditutup</b> — pembayaran QRIS belum diaktifkan admin. Silakan hubungi admin.</div>';
@@ -259,6 +265,14 @@ function tampilSelesai(o) {
           Masuk Portal Member
         </a>
       </div>
+      <div class="box-info">
+        <p style="margin:0 0 6px;font-weight:600">Cara memakai key Anda</p>
+        <p style="margin:0;line-height:1.8">
+          • <b>API Base URL:</b> <code class="mono">${esc(API_BASE)}</code><br>
+          • <b>Dashboard member:</b> <a href="${esc(PORTAL_URL)}">${esc(PORTAL_URL)}</a> — masuk dengan API Key di atas<br>
+          • Kirim request ke Base URL di atas dengan header <code class="mono">Authorization: Bearer &lt;key&gt;</code>
+        </p>
+      </div>
       <p class="muted" style="margin-bottom:0;font-size:13px">
         Login portal memakai API Key Anda sebagai kredensial. Jaga kerahasiaan key — siapa pun yang memegangnya memakai kuota Anda.
       </p>`;
@@ -284,6 +298,12 @@ function tampilSelesai(o) {
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
           Cek Kuota di Portal
         </a>
+      </div>
+      <div class="box-info">
+        <p style="margin:0;line-height:1.8">
+          • <b>API Base URL:</b> <code class="mono">${esc(API_BASE)}</code><br>
+          • <b>Dashboard member:</b> <a href="${esc(PORTAL_URL)}">${esc(PORTAL_URL)}</a>
+        </p>
       </div>`;
   }
   window.scrollTo({ top: 0, behavior: "smooth" });

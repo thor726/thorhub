@@ -117,6 +117,21 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_payment_events_time ON payment_events (created_at);
 
+  -- Linimasa pesanan (audit per pesanan, ala toko online): setiap kejadian
+  -- penting dicatat berurutan agar admin bisa melacak kendala pembayaran —
+  -- pesanan dibuat, notifikasi DANA masuk, dilunaskan (webhook/manual),
+  -- fulfillment, pengiriman key (WA/email sukses/gagal), pembatalan.
+  CREATE TABLE IF NOT EXISTS order_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id   INTEGER NOT NULL,                    -- FK logis ke orders.id
+    type       TEXT    NOT NULL DEFAULT 'info',     -- dibuat|webhook|lunas|fulfillment|notifikasi|admin|batal|info
+    actor      TEXT    NOT NULL DEFAULT 'sistem',   -- sistem|webhook|pembeli|admin
+    detail     TEXT    NOT NULL DEFAULT '',
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events (order_id, id);
+
   -- Konfigurasi toko (JSON per kunci): 'qris' {enabled,static,secret},
   -- 'notify' {fonnteToken, adminWa, resendKey, emailFrom, ...}.
   -- Disimpan di DB (bukan .env) agar bisa diubah dari panel admin tanpa deploy.
@@ -125,5 +140,13 @@ db.exec(`
     value TEXT NOT NULL
   );
 `);
+
+// Migrasi ringan untuk database lama: tambah kolom ip pada payment_events
+// bila belum ada (sumbernya dibaca ulang tiap start, jadi aman dipanggil
+// berkali-kali).
+const kolomEvents = db.prepare("PRAGMA table_info(payment_events)").all().map((c) => c.name);
+if (!kolomEvents.includes("ip")) {
+  db.exec("ALTER TABLE payment_events ADD COLUMN ip TEXT NOT NULL DEFAULT ''");
+}
 
 module.exports = db;

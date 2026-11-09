@@ -28,6 +28,7 @@ const payment = require("../lib/payment");
 const qris = require("../lib/qris");
 const notify = require("../lib/notify");
 const ratelimit = require("../lib/ratelimit");
+const pesanan = require("../lib/pesanan");
 
 const { QRIS_DANA_METHOD, ORDER_EXPIRY_HOURS } = payment;
 
@@ -39,11 +40,11 @@ function ipKlien(req) {
 }
 
 /** Catat event webhook ke payment_events (audit). */
-function logEvent(amount, matched, orderCode, rawText, note = "") {
+function logEvent(amount, matched, orderCode, rawText, note = "", ip = "") {
   try {
     db.prepare(
-      "INSERT INTO payment_events (source, raw_text, amount, matched, order_code, note) VALUES ('dana', ?, ?, ?, ?, ?)"
-    ).run(String(rawText || "").slice(0, 500), amount, matched ? 1 : 0, orderCode || "", note || "");
+      "INSERT INTO payment_events (source, raw_text, amount, matched, order_code, note, ip) VALUES ('dana', ?, ?, ?, ?, ?, ?)"
+    ).run(String(rawText || "").slice(0, 500), amount, matched ? 1 : 0, orderCode || "", note || "", String(ip || "").slice(0, 64));
   } catch (e) {
     console.error("[store] gagal simpan payment_event:", e.message);
   }
@@ -54,11 +55,14 @@ function logEvent(amount, matched, orderCode, rawText, note = "") {
  * ================================================================ */
 router.get("/packages", (_req, res) => {
   const q = store.getQrisSettings();
+  const tautan = notify.tautanToko();
   res.json({
     data: {
       packages: store.PACKAGES,
       store_ready: !!(q.enabled && q.static && q.secret),
       expiry_hours: ORDER_EXPIRY_HOURS,
+      api_base: tautan.api, // ditampilkan di halaman sukses /beli
+      portal_url: tautan.portal,
     },
   });
 });
@@ -176,8 +180,18 @@ router.post("/orders", async (req, res) => {
   } catch (e) {
     console.error("[store] gagal membangun QRIS dinamis:", e.message);
     db.prepare(`UPDATE orders SET status = 'CANCELLED', note = 'qris gagal dibangun' WHERE id = ?`).run(orderId);
+    pesanan.catatEvent(orderId, "info", "sistem", `Gagal membangun QRIS dinamis (${e.message}) — pesanan dibatalkan otomatis.`);
     return res.status(503).json({ error: { message: "Gagal menyiapkan QRIS. Hubungi admin.", code: "qris_error" } });
   }
+
+  // Linimasa: pesanan resmi dibuat & menunggu pembayaran (pelacakan admin)
+  pesanan.catatEvent(
+    orderId,
+    "dibuat",
+    "pembeli",
+    `Pesanan dibuat — ${paket.label} (${paket.tokens.toLocaleString("id-ID")} token), ` +
+      `tagihan ${pesanan.rupiah(amountToPay)} (kode unik +${uniqueCode}), berlaku ${ORDER_EXPIRY_HOURS} jam.`
+  );
 
   // 8. Notifikasi WA admin (best-effort, tanpa menahan respons)
   notify.notifyAdminNewOrder(order).catch(() => {});
@@ -294,6 +308,7 @@ router.post("/order/:code/cancel", (req, res) => {
   if (r.changes === 0) {
     return res.status(409).json({ error: { message: "Pesanan sudah diproses / tidak bisa dibatalkan.", code: "not_cancellable" } });
   }
+  pesanan.catatEvent(order.id, "batal", "pembeli", "Pesanan dibatalkan oleh pembeli sebelum pembayaran.");
   res.json({ data: { cancelled: true } });
 });
 
@@ -346,7 +361,7 @@ function prosesWebhookDana(raw, ctype, hSecret, ip, opts = {}) {
   }
   if (!payment.safeCompare((secret || "").trim(), expected)) {
     if (!opts.uji) recordWebhookFail(ip);
-    logEvent(0, false, "", "", `secret-invalid ip=${ip}${opts.uji ? " (uji)" : ""}`);
+    logEvent(0, false, "", "", `secret-invalid`, ip);
     return {
       status: 401,
       payload: {
@@ -359,7 +374,7 @@ function prosesWebhookDana(raw, ctype, hSecret, ip, opts = {}) {
 
   // 2. Placeholder MacroDroid tidak ter-expand?
   if (placeholder) {
-    logEvent(0, false, "", raw, `placeholder:${placeholder}`);
+    logEvent(0, false, "", raw, `placeholder:${placeholder}`, ip);
     return {
       status: 200,
       payload: {
@@ -374,7 +389,7 @@ function prosesWebhookDana(raw, ctype, hSecret, ip, opts = {}) {
   // 3. Ekstrak nominal dari teks notifikasi
   const amount = payment.extractDanaAmount(text) ?? payment.extractDanaAmountFrom(candidates);
   if (!amount) {
-    logEvent(0, false, "", raw, "nominal-tidak-terdeteksi");
+    logEvent(0, false, "", raw, "nominal-tidak-terdeteksi", ip);
     return {
       status: 200,
       payload: {
@@ -426,9 +441,19 @@ function prosesWebhookDana(raw, ctype, hSecret, ip, opts = {}) {
     if (pool.length) {
       const daftar = pool
         .slice(0, 5)
-        .map((o) => `${o.order_code} (Rp${o.amount_to_pay.toLocaleString("id-ID")})`)
+        .map((o) => `${o.order_code} (${pesanan.rupiah(o.amount_to_pay)})`)
         .join(", ");
-      logEvent(amount, false, pool.length === 1 ? pool[0].order_code : "", raw, `kurang-biaya-admin:${daftar}`);
+      logEvent(amount, false, pool.length === 1 ? pool[0].order_code : "", raw, `kurang-biaya-admin:${daftar}`, ip);
+      // Bila persis SATU kandidat, ikat event ke linimasa pesanan itu agar
+      // admin melihat dugaan pembayaran kurang langsung di detail pesanan.
+      if (pool.length === 1) {
+        pesanan.catatEvent(
+          pool[0].id,
+          "webhook",
+          "webhook",
+          `Notifikasi DANA masuk ${pesanan.rupiah(amount)} — KURANG dari tagihan ${pesanan.rupiah(pool[0].amount_to_pay)} (biaya admin belum dibayar?). TIDAK dilunaskan otomatis.`
+        );
+      }
       return {
         status: 200,
         payload: {
@@ -442,19 +467,20 @@ function prosesWebhookDana(raw, ctype, hSecret, ip, opts = {}) {
   }
 
   if (!order) {
-    logEvent(amount, false, "", raw, "");
+    logEvent(amount, false, "", raw, "", ip);
     return {
       status: 200,
       payload: {
         success: true,
         matched: false,
         amount,
-        message: `Tidak ada pesanan menunggu dengan nominal Rp ${amount.toLocaleString("id-ID")}.`,
+        message: `Tidak ada pesanan menunggu dengan nominal ${pesanan.rupiah(amount)}.`,
       },
     };
   }
 
-  logEvent(amount, true, order.order_code, raw, "");
+  logEvent(amount, true, order.order_code, raw, "", ip);
+  pesanan.catatEvent(order.id, "webhook", "webhook", `Notifikasi DANA masuk: nominal ${pesanan.rupiah(amount)} cocok dengan tagihan — diproses otomatis.`);
 
   // 6. Tandai PAID + eksekusi otomatis (idempoten terhadap notif ulang)
   const hasil = store.prosesPesananLunas(order);
@@ -472,7 +498,7 @@ function prosesWebhookDana(raw, ctype, hSecret, ip, opts = {}) {
       matched: true,
       amount,
       order_code: order.order_code,
-      message: `Pembayaran Rp ${amount.toLocaleString("id-ID")} cocok dengan pesanan ${order.order_code}. ${hasil.pesan}`,
+      message: `Pembayaran ${pesanan.rupiah(amount)} cocok dengan pesanan ${order.order_code}. ${hasil.pesan}`,
     },
   };
 }

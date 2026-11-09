@@ -252,4 +252,4 @@ async function notifyAdminNewOrder(order) {
   return sendWhatsApp(cfg.fonnteToken, cfg.adminWa, teks);
 }
 
-module.exports = { sendWhatsApp, sendEmail, kirimNotifikasiLunas, notifyAdminNewOrder, pesanWaPembeli, buildEmailHtml, rupiah };
+module.exports = { sendWhatsApp, sendEmail, kirimNotifikasiLunas, notifyAdminNewOrder, pesanWaPembeli, buildEmailHtml, rupiah, tautanToko };

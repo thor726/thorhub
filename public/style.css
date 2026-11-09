@@ -1971,3 +1971,86 @@ img, svg { max-width: 100%; height: auto; }
   margin: 0;
 }
 .switch-row input { width: 16px; height: 16px; accent-color: var(--lime); cursor: pointer; }
+
+/* ================================================================
+ * PELACAKAN PESANAN — linimasa (order_events) di modal detail
+ * ================================================================ */
+.timeline {
+  position: relative;
+  margin: 10px 0 0;
+  padding-left: 24px;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  bottom: 10px;
+  width: 2px;
+  background: var(--border-2);
+  border-radius: 2px;
+}
+.tl-item {
+  position: relative;
+  padding: 0 0 14px;
+}
+.tl-item:last-child { padding-bottom: 2px; }
+.tl-dot {
+  position: absolute;
+  left: -22px;
+  top: 5px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--muted-2);
+}
+.tl-dot.dibuat { border-color: var(--lime); }
+.tl-dot.webhook { border-color: var(--amber); }
+.tl-dot.lunas { border-color: var(--lime); background: var(--lime-bg); }
+.tl-dot.fulfillment { border-color: var(--lime); }
+.tl-dot.notifikasi { border-color: var(--blue); }
+.tl-dot.admin { border-color: var(--amber); }
+.tl-dot.batal { border-color: var(--red); }
+.tl-dot.info { border-color: var(--muted-2); }
+.tl-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tl-head b { font-size: 13px; color: var(--text); }
+.tl-head .tag { font-size: 10px; padding: 1px 7px; }
+.tl-detail {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text-body);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* Tag status "Dibayar" (PAID) — biru, membedakan dari Selesai */
+.tag.info {
+  background: rgba(59, 130, 246, .1);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, .3);
+}
+
+/* Kotak info ringkas di halaman sukses /beli (Base URL + dashboard) */
+.box-info {
+  margin: 18px 0 14px;
+  padding: 14px 16px;
+  border: 1px dashed var(--lime-line);
+  border-radius: var(--radius-lg);
+  background: var(--lime-bg);
+  font-size: 13.5px;
+  color: var(--text-body);
+}
+.box-info a { color: var(--lime); font-weight: 600; }
+.box-info code {
+  background: rgba(163, 230, 53, .12);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  word-break: break-all;
+}

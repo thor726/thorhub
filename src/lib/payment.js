@@ -247,14 +247,23 @@ function extractDanaAmountFrom(candidates) {
 function expireStaleOrders() {
   const now = Date.now();
   const stale = db
-    .prepare(`SELECT id FROM orders WHERE status = 'PENDING' AND expires_at < ? LIMIT 50`)
+    .prepare(`SELECT id, order_code FROM orders WHERE status = 'PENDING' AND expires_at < ? LIMIT 50`)
     .all(now);
   if (!stale.length) return 0;
   const upd = db.prepare(`UPDATE orders SET status = 'CANCELLED', note = 'kedaluwarsa otomatis' WHERE id = ? AND status = 'PENDING'`);
   let n = 0;
   for (const s of stale) {
     const r = upd.run(s.id); // guard status = idempoten terhadap balapan webhook
-    n += r.changes;
+    if (r.changes > 0) {
+      n += r.changes;
+      // Linimasa: kedaluwarsa otomatis (penting saat pelacakan "kenapa bayaranku hangus")
+      require("./pesanan").catatEvent(
+        s.id,
+        "batal",
+        "sistem",
+        `Pesanan ${s.order_code} kedaluwarsa otomatis — tagihan tidak dibayar dalam batas waktu.`
+      );
+    }
   }
   return n;
 }

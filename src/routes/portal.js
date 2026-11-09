@@ -429,39 +429,202 @@ router.post("/admin/store/test", requireAdminSession, (req, res) => {
   });
 });
 
-/** GET /portal/admin/orders — daftar pesanan terbaru (100). */
+// ---------------------------------------------------------------
+// PESANAN & PELACAKAN PEMBAYARAN (ala toko online)
+// Admin dapat: daftar terfilter + statistik, detail pesanan beserta
+// linimasa (order_events) & notifikasi DANA terkait, aksi manual
+// (lunaskan / batal / kirim ulang notifikasi) — semua tercatat.
+// ---------------------------------------------------------------
+const pesananLib = require("../lib/pesanan");
+const notifyLib = require("../lib/notify");
+
+const STATUS_VALID = new Set(["PENDING", "PAID", "COMPLETED", "CANCELLED"]);
+
+/** Label status gaya toko online (dipakai juga frontend). */
+const LABEL_STATUS = {
+  PENDING: "Menunggu Bayar",
+  PAID: "Dibayar",
+  COMPLETED: "Selesai",
+  CANCELLED: "Batal",
+};
+
+/** GET /portal/admin/orders — daftar pesanan + statistik + log webhook.
+ *  Query: ?status=PENDING|PAID|COMPLETED|CANCELLED&q=<cari>&limit&offset
+ *  q dicari ke: kode pesanan, nama, email, WA, key target, key terbit.
+ */
 router.get("/admin/orders", requireAdminSession, (req, res) => {
-  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+  const status = String(req.query.status || "").trim().toUpperCase();
+  const q = String(req.query.q || "").trim().slice(0, 80);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+
+  const where = [];
+  const args = [];
+  if (STATUS_VALID.has(status)) {
+    where.push("status = ?");
+    args.push(status);
+  }
+  if (q) {
+    const like = `%${q}%`;
+    where.push(
+      "(order_code LIKE ? OR user_name LIKE ? OR email LIKE ? OR whatsapp LIKE ? OR target_api_key LIKE ? OR api_key_issued LIKE ?)"
+    );
+    args.push(like, like, like, like, like, like);
+  }
+  const klausa = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
   const rows = db
     .prepare(
       `SELECT id, order_code, mode, package_id, quota_tokens, user_name, email, whatsapp,
               target_api_key, api_key_issued, base_amount, unique_code, amount_to_pay,
               payment_method, status, note, created_at, paid_at, completed_at, expires_at
-       FROM orders ORDER BY id DESC LIMIT ?`
+       FROM orders ${klausa} ORDER BY id DESC LIMIT ? OFFSET ?`
     )
-    .all(limit);
+    .all(...args, limit, offset);
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM orders ${klausa}`).get(...args).n;
+
+  // Statistik ala dashboard toko: jumlah per status + omzet (lunas)
+  const perStatus = db
+    .prepare(`SELECT status, COUNT(*) AS n FROM orders GROUP BY status`)
+    .all()
+    .reduce((acc, r) => ((acc[r.status] = r.n), acc), {});
+  const omzet = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_to_pay), 0) AS total,
+              COALESCE(SUM(CASE WHEN date(completed_at) = date('now','localtime') THEN amount_to_pay ELSE 0 END), 0) AS hari_ini,
+              COALESCE(SUM(CASE WHEN date(created_at) = date('now','localtime') THEN 1 ELSE 0 END), 0) AS pesanan_hari_ini
+       FROM orders WHERE status = 'COMPLETED'`
+    )
+    .get();
+
   const events = db
-    .prepare(`SELECT id, amount, matched, order_code, note, created_at FROM payment_events ORDER BY id DESC LIMIT 50`)
+    .prepare(`SELECT id, amount, matched, order_code, note, ip, created_at FROM payment_events ORDER BY id DESC LIMIT 50`)
     .all();
-  res.json({ data: { orders: rows, events } });
+
+  res.json({
+    data: {
+      orders: rows.map((o) => ({ ...o, status_label: LABEL_STATUS[o.status] || o.status })),
+      events,
+      stats: {
+        per_status: perStatus,
+        total_semua: Object.values(perStatus).reduce((a, b) => a + b, 0),
+        omzet_lunas: omzet.total,
+        omzet_hari_ini: omzet.hari_ini,
+        pesanan_hari_ini: omzet.pesanan_hari_ini,
+        menunggu_bayar: perStatus.PENDING || 0,
+      },
+      paging: { total, limit, offset },
+    },
+  });
 });
 
-/** POST /portal/admin/orders/:code/confirm — konfirmasi manual (lunas + eksekusi). */
+/** GET /portal/admin/orders/:code — detail 1 pesanan + linimasa + log DANA terkait. */
+router.get("/admin/orders/:code", requireAdminSession, (req, res) => {
+  const order = db
+    .prepare("SELECT * FROM orders WHERE order_code = ?")
+    .get(String(req.params.code || "").trim().toUpperCase());
+  if (!order) return res.status(404).json({ error: { message: "Pesanan tidak ditemukan.", code: "not_found" } });
+
+  // Linimasa pesanan (order_events) — urut lama → baru
+  const timeline = pesananLib.riwayat(order.id);
+
+  // Notifikasi DANA yang berhubungan dengan pesanan ini:
+  //   - langsung tercatat dengan order_code, ATAU
+  //   - tidak cocok tapi kodenya disebut di catatan (mis. kurang-biaya-admin)
+  const events = db
+    .prepare(
+      `SELECT id, amount, matched, order_code, note, ip, created_at FROM payment_events
+       WHERE order_code = ? OR (order_code = '' AND note LIKE ?)
+       ORDER BY id DESC LIMIT 30`
+    )
+    .all(order.order_code, `%${order.order_code}%`);
+
+  res.json({
+    data: {
+      order: { ...order, status_label: LABEL_STATUS[order.status] || order.status },
+      timeline,
+      events,
+    },
+  });
+});
+
+/** POST /portal/admin/orders/:code/confirm — konfirmasi manual (lunas + eksekusi).
+ *  Body opsional: { alasan: "…" } — dicatat di linimasa untuk audit.
+ */
 router.post("/admin/orders/:code/confirm", requireAdminSession, (req, res) => {
   const order = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(String(req.params.code || "").toUpperCase());
   if (!order) return res.status(404).json({ error: { message: "Pesanan tidak ditemukan.", code: "not_found" } });
   if (order.status === "COMPLETED") {
     return res.status(409).json({ error: { message: "Pesanan sudah selesai sebelumnya.", code: "already_completed" } });
   }
+  const alasan = String((req.body && req.body.alasan) || "").trim().slice(0, 300);
   if (order.status === "CANCELLED") {
     // Pembayaran terlambat setelah kedaluwarsa → izinkan admin mengaktifkan kembali
     db.prepare(`UPDATE orders SET status = 'PENDING', note = 'dibuka ulang admin' WHERE id = ?`).run(order.id);
     order.status = "PENDING";
+    pesananLib.catatEvent(order.id, "admin", "admin", "Pesanan CANCELLED dibuka ulang oleh admin (dugaan pembayaran terlambat masuk).");
   }
-  const hasil = storeLib.prosesPesananLunas(order);
-  storeRoutes.logEvent(order.amount_to_pay, true, order.order_code, "", `konfirmasi-manual admin`);
+  const hasil = storeLib.prosesPesananLunas(order, { actor: "admin", alasan });
+  storeRoutes.logEvent(order.amount_to_pay, true, order.order_code, "", "konfirmasi-manual", "panel-admin");
+  if (!hasil.ok && !hasil.sudahSelesai) {
+    pesananLib.catatEvent(order.id, "admin", "admin", `Konfirmasi manual GAGAL dieksekusi: ${hasil.pesan}`);
+  }
   const final = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(order.order_code);
   res.json({ data: { ok: hasil.ok, message: hasil.pesan, order: final } });
+});
+
+/** POST /portal/admin/orders/:code/cancel — admin batalkan pesanan menunggu bayar.
+ *  Body opsional: { alasan: "…" } — mis. "pembeli minta batal via WA".
+ */
+router.post("/admin/orders/:code/cancel", requireAdminSession, (req, res) => {
+  const order = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(String(req.params.code || "").toUpperCase());
+  if (!order) return res.status(404).json({ error: { message: "Pesanan tidak ditemukan.", code: "not_found" } });
+  if (order.status !== "PENDING") {
+    return res.status(409).json({
+      error: { message: `Hanya pesanan Menunggu Bayar yang bisa dibatalkan (status sekarang: ${order.status}).`, code: "not_cancellable" },
+    });
+  }
+  const alasan = String((req.body && req.body.alasan) || "").trim().slice(0, 300);
+  db.prepare(`UPDATE orders SET status = 'CANCELLED', note = ? WHERE id = ? AND status = 'PENDING'`).run(
+    alasan ? `dibatalkan admin: ${alasan}` : "dibatalkan admin",
+    order.id
+  );
+  pesananLib.catatEvent(
+    order.id,
+    "batal",
+    "admin",
+    `Pesanan dibatalkan oleh ADMIN${alasan ? ` (“${alasan}”)` : ""} — kode unik dilepas kembali ke pool.`
+  );
+  const final = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(order.order_code);
+  res.json({ data: { ok: true, message: `Pesanan ${order.order_code} dibatalkan.`, order: final } });
+});
+
+/** POST /portal/admin/orders/:code/resend — kirim ulang key/struk (WA + email).
+ *  Untuk pesanan COMPLETED yang pengirimannya gagal (mis. Fonnte/Resend error).
+ *  Body opsional: { alasan: "…" }.
+ */
+router.post("/admin/orders/:code/resend", requireAdminSession, async (req, res) => {
+  const order = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(String(req.params.code || "").toUpperCase());
+  if (!order) return res.status(404).json({ error: { message: "Pesanan tidak ditemukan.", code: "not_found" } });
+  if (order.status !== "COMPLETED") {
+    return res.status(409).json({
+      error: { message: "Kirim ulang hanya untuk pesanan SELESAI (key sudah terbit). Untuk menunda, batalkan atau lunaskan dulu.", code: "not_resendable" },
+    });
+  }
+  const alasan = String((req.body && req.body.alasan) || "").trim().slice(0, 300);
+  const hasil = await notifyLib.kirimNotifikasiLunas(order);
+  const ringkas = [
+    hasil.waSent ? "WA pembeli terkirim ✓" : order.whatsapp ? "WA pembeli GAGAL ✗" : "WA dilewati (tanpa nomor)",
+    hasil.emailSent ? "Email struk terkirim ✓" : order.email ? "Email struk GAGAL/nonaktif ✗" : "Email dilewati (tanpa alamat)",
+    hasil.adminSent ? "WA admin terkirim ✓" : "WA admin gagal/nonaktif",
+  ].join(" · ");
+  pesananLib.catatEvent(order.id, "notifikasi", "admin", `KIRIM ULANG notifikasi oleh admin${alasan ? ` (“${alasan}”)` : ""}: ${ringkas}`);
+  res.json({
+    data: {
+      ...hasil,
+      message: `Percobaan kirim ulang selesai — ${ringkas}`,
+    },
+  });
 });
 
 // ---------------------------------------------------------------

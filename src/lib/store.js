@@ -13,6 +13,7 @@ const crypto = require("crypto");
 const db = require("../db");
 const payment = require("./payment");
 const notify = require("./notify");
+const pesanan = require("./pesanan");
 
 /** Katalog paket kuota — harga Rupiah tetap, token per paket. */
 const PACKAGES = [
@@ -106,9 +107,15 @@ function tambahKuotaUntukPesanan(order) {
  *   mode topup    → token_limit += quota_tokens pada key target
  * Setelah COMPLETED, kirim notifikasi (WA + email) best-effort.
  *
+ * @param {object} order  baris orders lengkap
+ * @param {object} opts   { actor: 'webhook'|'admin', alasan: string } —
+ *                        dicatat ke linimasa pesanan untuk pelacakan admin.
  * @returns {{ok: boolean, sudahSelesai: boolean, pesan: string}}
  */
-function prosesPesananLunas(order) {
+function prosesPesananLunas(order, opts = {}) {
+  const actor = opts.actor === "admin" ? "admin" : "webhook";
+  const alasan = String(opts.alasan || "").trim().slice(0, 300);
+
   // 1. Transisi PENDING → PAID (guard status; idempoten terhadap webhook ganda)
   const r = db
     .prepare(`UPDATE orders SET status = 'PAID', paid_at = ? WHERE id = ? AND status = 'PENDING'`)
@@ -117,6 +124,13 @@ function prosesPesananLunas(order) {
     // Sudah diproses request lain — jangan kirim notifikasi dobel
     return { ok: true, sudahSelesai: true, pesan: "Pesanan sudah tercatat dibayar sebelumnya." };
   }
+  pesanan.catatEvent(
+    order.id,
+    "lunas",
+    actor,
+    `Pembayaran ${pesanan.rupiah(order.amount_to_pay)} diterima` +
+      (actor === "admin" ? ` — dikonfirmasi MANUAL oleh admin${alasan ? ` (\u201c${alasan}\u201d)` : ""}` : " otomatis via notifikasi DANA.")
+  );
 
   // 2. Fulfillment
   let selesai = false;
@@ -128,14 +142,24 @@ function prosesPesananLunas(order) {
       order.api_key_issued = apiKey;
       catatan = "key baru diterbitkan";
       selesai = true;
+      pesanan.catatEvent(order.id, "fulfillment", "sistem", `API Key baru diterbitkan: ${apiKey.slice(0, 14)}… (${order.quota_tokens.toLocaleString("id-ID")} token)`);
     } else {
       const ok = tambahKuotaUntukPesanan(order);
       catatan = ok ? `kuota +${order.quota_tokens} token ditambahkan` : `key target tidak ditemukan saat fulfillment`;
       selesai = ok;
+      pesanan.catatEvent(
+        order.id,
+        ok ? "fulfillment" : "info",
+        "sistem",
+        ok
+          ? `Kuota +${order.quota_tokens.toLocaleString("id-ID")} token ditambahkan ke ${order.target_api_key.slice(0, 18)}…`
+          : `GAGAL: key target ${order.target_api_key} tidak ditemukan di database — perlu tindakan admin.`
+      );
     }
   } catch (e) {
     catatan = `fulfillment gagal: ${e.message}`;
     db.prepare(`UPDATE orders SET note = ? WHERE id = ?`).run(catatan, order.id);
+    pesanan.catatEvent(order.id, "info", "sistem", `Fulfillment GAGAL: ${e.message} — perlu tindakan admin.`);
     return { ok: false, sudahSelesai: false, pesan: catatan };
   }
 
@@ -151,11 +175,24 @@ function prosesPesananLunas(order) {
     db.prepare(`UPDATE orders SET note = ? WHERE id = ?`).run(catatan, order.id);
   }
 
-  // 4. Notifikasi pembeli + admin (best-effort — tidak boleh memutus alur)
+  // 4. Notifikasi pembeli + admin (best-effort — tidak boleh memutus alur).
+  //    Hasilnya (terkirim/gagal per saluran) dicatat ke linimasa pesanan agar
+  //    admin bisa melihat & mengulang pengiriman dari panel bila gagal.
   const orderFinal = selesai ? db.prepare(`SELECT * FROM orders WHERE id = ?`).get(order.id) : final;
   notify
     .kirimNotifikasiLunas(orderFinal)
-    .catch((e) => console.error("[store] notifikasi lunas gagal:", e.message));
+    .then((hasil) => {
+      const ringkas = [
+        hasil.waSent ? "WA pembeli terkirim ✓" : orderFinal.whatsapp ? "WA pembeli GAGAL ✗" : "WA pembeli dilewati (tanpa nomor)",
+        hasil.emailSent ? "Email struk terkirim ✓" : orderFinal.email ? "Email struk GAGAL/nonaktif ✗" : "Email dilewati (tanpa alamat)",
+        hasil.adminSent ? "WA admin terkirim ✓" : "WA admin gagal/nonaktif",
+      ].join(" · ");
+      pesanan.catatEvent(order.id, "notifikasi", "sistem", ringkas);
+    })
+    .catch((e) => {
+      console.error("[store] notifikasi lunas gagal:", e.message);
+      pesanan.catatEvent(order.id, "notifikasi", "sistem", `Pengiriman notifikasi GAGAL: ${e.message} — gunakan \u201cKirim Ulang\u201d di panel admin.`);
+    });
 
   return {
     ok: selesai,
