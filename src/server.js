@@ -26,11 +26,19 @@ app.use(express.json({ limit: "4mb" }));
 // (brute-force guard). Dengan loopback, req.ip = IP klien nyata.
 app.set("trust proxy", "loopback");
 
+// Mode sandbox/preview (SANDBOX_PREVIEW=1): panel preview menyematkan halaman
+// dalam <iframe> lintas subdomain, sehingga header anti-framing dilonggarkan
+// agar halaman tetap terlihat di panel. Tanpa env ini (default produksi),
+// perilaku tetap ketat seperti semula (X-Frame-Options: DENY).
+const IZINKAN_IFRAME_PREVIEW = process.env.SANDBOX_PREVIEW === "1";
+
 // Header keamanan dasar (hardening). Mencegah clickjacking, MIME-sniffing,
 // kebocoran referrer, dan membatasi sumber script/iframe.
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");            // tolak <iframe> ke panel admin (anti clickjacking)
+  if (!IZINKAN_IFRAME_PREVIEW) {
+    res.setHeader("X-Frame-Options", "DENY");          // tolak <iframe> ke panel admin (anti clickjacking)
+  }
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("X-DNS-Prefetch-Control", "off");
   res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
@@ -45,7 +53,7 @@ app.use((_req, res, next) => {
       "connect-src 'self'; " +
       "font-src 'self'; " +
       "object-src 'none'; " +
-      "frame-ancestors 'none'; " +
+      `frame-ancestors ${IZINKAN_IFRAME_PREVIEW ? "*" : "'none'"}; ` +
       "base-uri 'self'; " +
       "form-action 'self'"
   );
