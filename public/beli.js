@@ -1,28 +1,69 @@
 /**
  * beli.js — Halaman toko pembelian (vanilla JS, tanpa build step).
  *
- * Alur: pilih mode (key baru / top-up) → pilih paket → isi data →
- * QRIS tampil (nominal + kode unik) → polling /store/order/:code tiap 5 dtk
- * → COMPLETED → API key tampil + tombol salin (dan terkirim email/WA).
+ * Alur (stepper ala marketplace, referensi Thor-market):
+ *   1 Checkout (pilih paket + data pembeli) → 2 Pembayaran (QRIS + countdown)
+ *   → 3 Selesai (key tampil + salin).
  *
- * Pesanan aktif disimpan di localStorage agar reload halaman tidak
- * menghilangkan akses ke QR (access_token hanya diberikan sekali oleh server).
+ * Kode pesanan TERSIMPAN DI URL (?order=THX-…) seperti Thor-market, sehingga
+ * halaman pembayaran TETAP MUNCUL setelah refresh/restart/tutup-tab — tidak
+ * bergantung pada localStorage saja (webview WA/IG sering menghapusnya).
+ * access_token tetap disimpan di localStorage (diberikan sekali oleh server);
+ * polling GET /store/order/:code?t= membangun ulang QR kapan pun.
+ *
+ * Pesanan aktif juga ditawarkan lewat kartu "Lanjutkan Pembayaran" saat
+ * pembeli kembali ke /beli tanpa parameter URL.
  */
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const rupiah = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
-const KUNCI_ORDER = "thorhub_order_aktif"; // { kode, token, expires_at }
+const KUNCI_ORDER = "thorhub_order_aktif"; // { kode, token, expires_at, amount, base, unik, paketLabel, qr }
 
 let PAKET = [];
 let mode = "key_baru";
 let paketDipilih = null; // { id, label, tokens, price }
-let pesanan = null; // { kode, token, expires_at, amount }
+let pesanan = null; // { kode, token, expires_at, amount, base, unik, paketLabel, qr }
 let pollTimer = null;
 let countdownTimer = null;
+// Selisih jam server vs perangkat (dari payload server_now) — hitung-mundur
+// kebal jam perangkat yang tergesa/mundur (pola yang sama dipakai Thor-market).
+let offsetServer = 0;
 // Tautan resmi dari server (ikut PUBLIC_BASE_URL bila diisi admin):
 // ditampilkan di halaman sukses agar pembeli tahu Base URL & dashboard.
 let API_BASE = "https://llm.thormarket.site/v1";
 let PORTAL_URL = "https://llm.thormarket.site/portal";
+
+/* ================= Stepper (1 Checkout → 2 Pembayaran → 3 Selesai) ================= */
+function setStepper(n) {
+  document.querySelectorAll("#stepper .st").forEach((li) => {
+    const i = Number(li.dataset.st);
+    const done = i < n;
+    const active = i === n;
+    li.classList.toggle("done", done);
+    li.classList.toggle("active", active);
+    if (active) li.setAttribute("aria-current", "step");
+    else li.removeAttribute("aria-current");
+    $("st-no-" + i).innerHTML = done ? "✓" : String(i);
+  });
+}
+
+/* Selisih jam dipakai HANYA bila wajar (±10 menit) — server janggal tidak
+   boleh membuat hitung-mundur melompat. */
+function amanOffset(ms) {
+  return Math.abs(ms) < 10 * 60_000 ? ms : 0;
+}
+
+/* ================= URL: kode pesanan di address bar ================= */
+function sinkronUrl(kode) {
+  try {
+    history.replaceState(null, "", "/beli?order=" + encodeURIComponent(kode));
+  } catch { /* abaikan */ }
+}
+function bersihkanUrl() {
+  try {
+    if (new URLSearchParams(location.search).has("order")) history.replaceState(null, "", "/beli");
+  } catch { /* abaikan */ }
+}
 
 /* ================= Muat katalog paket ================= */
 async function muatPaket() {
@@ -125,9 +166,14 @@ $("form-beli").addEventListener("submit", async (e) => {
       token: pay.access_token,
       expires_at: pay.expires_at,
       amount: pay.amount_to_pay,
+      base: pay.base_amount,
+      unik: pay.unique_code,
+      paketLabel: paketDipilih ? `${paketDipilih.label} token` : "",
       qr: pay.qr_image,
     };
+    if (pay.server_now) offsetServer = amanOffset(pay.server_now - Date.now());
     simpanOrderLokal();
+    sinkronUrl(pesanan.kode);
     tampilPembayaran(pay.qr_image);
   } catch (err) {
     pesanForm(err.message, false);
@@ -142,6 +188,7 @@ function pesanForm(msg, ok = true) {
 
 /* ================= Tampilan pembayaran ================= */
 function tampilPembayaran(qrImage) {
+  setStepper(2);
   $("step-form").classList.add("hidden");
   $("step-selesai").classList.add("hidden");
   $("step-bayar").classList.remove("hidden");
@@ -149,9 +196,11 @@ function tampilPembayaran(qrImage) {
 
   $("pay-kode").textContent = pesanan.kode;
   $("pay-amount").textContent = rupiah(pesanan.amount);
-  $("pay-kode-unik").textContent = "+" + (paketDipilih ? pesanan.amount - paketDipilih.price : "—");
-  $("pay-harga").textContent = paketDipilih ? rupiah(paketDipilih.price) : "—";
-  $("pay-paket").textContent = paketDipilih ? `${paketDipilih.label} token` : "—";
+  // Info paket diambil dari data pesanan (bukan pilihan form) supaya
+  // tampilan yang DIPULIHKAN setelah reload tetap lengkap — bukan "—".
+  $("pay-kode-unik").textContent = "+" + (pesanan.unik ?? "—");
+  $("pay-harga").textContent = pesanan.base ? rupiah(pesanan.base) : "—";
+  $("pay-paket").textContent = pesanan.paketLabel || "—";
   $("pay-badge").textContent = "menunggu pembayaran";
   $("pay-badge").className = "tag warn";
   setQr(qrImage);
@@ -171,7 +220,7 @@ function setQr(qrImage) {
 function mulaiCountdown() {
   if (countdownTimer) clearInterval(countdownTimer);
   const perbarui = () => {
-    const sisa = Math.max(0, pesanan.expires_at - Date.now());
+    const sisa = Math.max(0, pesanan.expires_at - (Date.now() + offsetServer));
     const m = Math.floor(sisa / 60000);
     const s = Math.floor((sisa % 60000) / 1000);
     $("pay-expired").textContent = `${m}mnt ${String(s).padStart(2, "0")}dtk`;
@@ -187,12 +236,14 @@ function mulaiCountdown() {
 }
 
 function tampilKedaluwarsa() {
+  setStepper(1);
   $("pay-badge").textContent = "kedaluwarsa";
   $("pay-badge").className = "tag off";
   $("bayar-msg").innerHTML =
     '<div class="alert warn">Tagihan kedaluwarsa. Silakan buat pesanan baru bila masih ingin membeli.</div>' +
     '<div class="row-actions"><button class="btn primary" onclick="location.href=\'/beli\'">Buat Pesanan Baru</button></div>';
   hapusOrderLokal();
+  bersihkanUrl();
 }
 
 /* ================= Polling status ================= */
@@ -215,6 +266,7 @@ async function cekStatus() {
     const r = await fetch(`/store/order/${encodeURIComponent(pesanan.kode)}?t=${encodeURIComponent(pesanan.token)}`);
     const d = await r.json();
     const o = d.data || {};
+    if (o.server_now) offsetServer = amanOffset(o.server_now - Date.now());
     if (o.status === "PENDING" && o.qr_image && !$("qr-img").src) setQr(o.qr_image);
     if (o.status === "PAID") {
       $("pay-badge").textContent = "dibayar — menyiapkan key…";
@@ -227,10 +279,12 @@ async function cekStatus() {
       $("bayar-msg").innerHTML =
         '<div class="alert warn">Pesanan dibatalkan / kedaluwarsa.</div><div class="row-actions"><button class="btn primary" onclick="location.href=\'/beli\'">Buat Pesanan Baru</button></div>';
       hapusOrderLokal();
+      bersihkanUrl();
     }
     if (o.status === "COMPLETED") {
       hentikanPolling();
-      hapusOrderLokal();
+      /* Token TIDAK dihapus — jadikan struk: reload tetap menampilkan key.
+         Hanya pesanan CANCELLED yang membersihkan penyimpanan. */
       tampilSelesai(o);
     }
   } catch {
@@ -240,8 +294,25 @@ async function cekStatus() {
   }
 }
 
+/* Tombol "Sudah Bayar? Cek Sekarang" — dipakai saat pembeli kembali dari
+   aplikasi DANA dan tidak mau menunggu polling 5 detik. */
+$("btn-cek-status").addEventListener("click", () => {
+  cekStatus();
+  $("poll-dot").style.color = "var(--lime)";
+  setTimeout(() => ($("poll-dot").style.color = ""), 1200);
+});
+
+/* Kembali ke tab (dari aplikasi DANA/m-banking) → cek status langsung,
+   polling di tab latar sering di-throttle browser. */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && pesanan && !$("step-bayar").classList.contains("hidden")) {
+    cekStatus();
+  }
+});
+
 /* ================= Tampilan selesai ================= */
 function tampilSelesai(o) {
+  setStepper(3);
   $("step-bayar").classList.add("hidden");
   $("step-selesai").classList.remove("hidden");
 
@@ -355,7 +426,106 @@ function hapusOrderLokal() {
   } catch { /* abaikan */ }
 }
 
-/** Ada pesanan PENDING sebelumnya? Tawarkan lanjut bayar. */
+/* Label paket untuk tampilan yang dipulihkan: cocokkan katalog, fallback
+   ke jumlah token dari data pesanan. */
+function labelPaket(packageId, quotaTokens) {
+  const p = PAKET.find((x) => x.id === packageId);
+  if (p) return `${p.label} token`;
+  if (quotaTokens) return `${Number(quotaTokens).toLocaleString("id-ID")} token`;
+  return "—";
+}
+
+/* ====================================================================
+ * PEMULIHAN PESANAN (pola Thor-market: kode pesanan ada di URL)
+ *   ?order=THX-… + token di localStorage → tampilan pembayaran/hasil
+ *   langsung dipulihkan, QR dibangun ulang server. Tanpa token (storage
+ *   dibersihkan/webview) → status ringkas + petunjuk.
+ * ==================================================================== */
+async function pulihkanDariUrl() {
+  const kode = (new URLSearchParams(location.search).get("order") || "").trim();
+  if (!kode) return false;
+
+  const lama = bacaOrderLokal();
+  const token = lama && lama.kode === kode && lama.token ? lama.token : "";
+  try {
+    const r = await fetch(`/store/order/${encodeURIComponent(kode)}${token ? "?t=" + encodeURIComponent(token) : ""}`);
+    if (r.status === 404) {
+      hapusOrderLokal();
+      bersihkanUrl();
+      return false;
+    }
+    const o = (await r.json()).data || {};
+    if (o.server_now) offsetServer = amanOffset(o.server_now - Date.now());
+
+    /* Selesai → halaman sukses (key masih tampil bila token sah; kalau tidak,
+       pesan umum + arahan cek email/WA). URL dibiarkan agar refresh tetap ada. */
+    if (o.status === "COMPLETED") {
+      if (!o.limited) {
+        tampilSelesai(o);
+      } else {
+        setStepper(3);
+        $("step-form").classList.add("hidden");
+        $("step-bayar").classList.add("hidden");
+        $("step-selesai").classList.remove("hidden");
+        $("selesai-card").innerHTML = `
+          <h1>
+            <svg class="ico" style="width:30px;height:30px;color:var(--lime)" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span>Pembayaran <span class="grad">Berhasil!</span></span>
+          </h1>
+          <span class="eyebrow">pesanan ${esc(kode)}</span>
+          <p class="sub">Pesanan ini sudah lunas. Detail key/struk dikirim ke email &amp; WhatsApp Anda, atau masuk Portal Member untuk melihatnya.</p>
+          <div class="row-actions"><a class="btn primary" href="${esc(PORTAL_URL)}">Masuk Portal Member</a></div>`;
+      }
+      return true;
+    }
+
+    if (o.status !== "PENDING" && o.status !== "PAID") {
+      /* CANCELLED / kedaluwarsa → rapikan jejak, tampilkan form biasa */
+      hapusOrderLokal();
+      bersihkanUrl();
+      return false;
+    }
+
+    /* PENDING / PAID dengan token sah → tampilan pembayaran utuh */
+    if (token) {
+      pesanan = {
+        kode: o.order_code,
+        token,
+        expires_at: o.expires_at,
+        amount: o.amount_to_pay,
+        base: o.base_amount,
+        unik: o.unique_code,
+        paketLabel: labelPaket(o.package_id, o.quota_tokens),
+        qr: o.qr_image || (lama && lama.qr) || "",
+      };
+      simpanOrderLokal();
+      tampilPembayaran(o.qr_image || "");
+      if (o.status === "PAID") {
+        $("pay-badge").textContent = "dibayar — menyiapkan key…";
+        $("pay-badge").className = "tag ok";
+      }
+      return true;
+    }
+
+    /* PENDING tanpa token → status ringkas + arahan (tidak ada QR, tidak bocor) */
+    $("order-lama").innerHTML = `
+      <div class="card order-lama">
+        <h2>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          Pesanan ${esc(kode)} menunggu pembayaran
+        </h2>
+        <p class="muted" style="margin-top:0">
+          Nominal <b>${rupiah(o.amount_to_pay)}</b>. Untuk menampilkan QR, buka kembali dari perangkat/browser
+          tempat pesanan dibuat — atau buat pesanan baru di bawah.
+        </p>
+      </div>`;
+    return false;
+  } catch {
+    return false; /* jaringan gagal → tampilkan form biasa */
+  }
+}
+
+/** Tanpa ?order= di URL: tawarkan pesanan tersimpan (kartu "Lanjutkan Pembayaran"). */
 async function tawarkanOrderLama() {
   const lama = bacaOrderLokal();
   if (!lama || !lama.kode || !lama.token) return;
@@ -370,8 +540,10 @@ async function tawarkanOrderLama() {
       return;
     }
     const o = (await r.json()).data || {};
-    if (o.status === "COMPLETED") {
-      hapusOrderLokal();
+    if (o.server_now) offsetServer = amanOffset(o.server_now - Date.now());
+    if (o.status === "COMPLETED" || o.status === "PAID") {
+      /* Sudah lunas/dibayar → bukan utang: tanpa kartu lanjutkan.
+         Catatan dibiarkan sebagai struk (pemulihan ?order= tetap bekerja). */
       return;
     }
     if (o.status !== "PENDING") {
@@ -386,7 +558,7 @@ async function tawarkanOrderLama() {
         </h2>
         <p class="muted" style="margin-top:0">
           Pesanan <b class="mono">${esc(lama.kode)}</b> sebesar <b>${rupiah(o.amount_to_pay)}</b> masih menunggu pembayaran
-          (berlaku ${Math.ceil((lama.expires_at - Date.now()) / 60000)} menit lagi).
+          (berlaku ${Math.ceil((lama.expires_at - (Date.now() + offsetServer)) / 60000)} menit lagi).
         </p>
         <div class="row-actions">
           <button class="btn primary" id="btn-lanjut" type="button">Lanjutkan Pembayaran</button>
@@ -394,8 +566,15 @@ async function tawarkanOrderLama() {
         </div>
       </div>`;
     $("btn-lanjut").onclick = () => {
-      pesanan = lama;
+      pesanan = {
+        ...lama,
+        base: lama.base ?? o.base_amount,
+        unik: lama.unik ?? o.unique_code,
+        paketLabel: lama.paketLabel || labelPaket(o.package_id, o.quota_tokens),
+      };
+      simpanOrderLokal();
       $("order-lama").innerHTML = "";
+      sinkronUrl(pesanan.kode);
       tampilPembayaran(lama.qr || "");
       // QR lama mungkin tak tersimpan → polling akan mengambil ulang
     };
@@ -427,8 +606,11 @@ function bacaParameter() {
 
 /* ================= Boot ================= */
 (async () => {
-  await muatPaket(); // katalog dulu...
-  bacaParameter(); // ...baru parameter ?paket= bisa pra-memilih paket
-  perbaruiRingkasan();
+  await muatPaket(); // katalog dulu (label paket untuk tampilan pulihan)...
+  const pulih = await pulihkanDariUrl(); // ...lalu ?order= di URL bila ada
+  if (!pulih) {
+    bacaParameter(); // pra-pilih paket dari ?paket= / ?mode=
+    perbaruiRingkasan();
+    tawarkanOrderLama(); // kartu "Lanjutkan Pembayaran" dari localStorage
+  }
 })();
-tawarkanOrderLama();
