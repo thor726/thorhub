@@ -46,6 +46,7 @@ function showLogin() {
   if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; }
   hentikanTopupPolling();
   hentikanTopupCountdown();
+  tutupLacak();
   $("loading").classList.add("hidden");
   $("panel").classList.add("hidden");
   $("login-section").classList.remove("hidden");
@@ -150,6 +151,7 @@ async function boot() {
   renderTopupMasa(d);
   muatPaketTopup();
   muatRiwayatTopup();
+  muatPesanan();
   lanjutkanTopupTersimpan();
 
   await loadUsage();
@@ -463,6 +465,8 @@ document.querySelectorAll(".tab").forEach((btn) => {
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
     $("tab-" + btn.dataset.tab).classList.add("active");
+    // Buka tab Pesanan Saya → daftar selalu segar saat dilihat
+    if (btn.dataset.tab === "pesanan") muatPesanan();
   });
 });
 
@@ -757,6 +761,7 @@ async function cekTopupStatus() {
       tampilTopupSelesai(o);
       boot(); // segarkan kuota, masa aktif & peringatan di dashboard
       muatRiwayatTopup();
+      muatPesanan();
     }
   } catch {
     /* jaringan gagal sesaat → coba lagi di tick berikutnya */
@@ -842,9 +847,9 @@ async function muatRiwayatTopup() {
     }
     tb.innerHTML = rows
       .map((o) => {
-        const cls = o.status === "COMPLETED" ? "ok" : o.status === "PENDING" ? "warn" : "off";
+        const cls = o.status === "COMPLETED" ? "ok" : o.status === "PENDING" ? "warn" : o.status === "PAID" ? "info" : "off";
         const jenis = o.mode === "key_baru" ? "Key baru" : "Top-up";
-        return `<tr>
+        return `<tr class="row-lacak" data-code="${esc(o.order_code)}" title="Klik untuk melacak pesanan ini">
           <td class="mono muted">${esc(o.order_code)}</td>
           <td>${jenis}</td>
           <td>${num(o.quota_tokens)} token</td>
@@ -891,6 +896,408 @@ function lanjutkanTopupTersimpan() {
   }
   topupPesanan = lama;
   tampilTopupBayar(lama.qr || "");
+}
+
+// ============================================================
+// TAB PESANAN SAYA — pelacakan pesanan ala marketplace besar
+// Daftar kartu pesanan + chip statistik + filter status + pencarian
+// kode, dan modal detail: stepper 4 langkah, info pesanan/pembayaran,
+// linimasa, QR lanjutan bayar, dan pembatalan mandiri.
+// ============================================================
+let pesananFilter = { status: "", q: "" };
+let cariTimer = null;
+let lacakKode = null; // kode pesanan yang sedang dibuka di modal
+let lacakDetail = null; // detail terakhir (untuk countdown)
+let lacakPollTimer = null;
+let lacakPolling = false;
+let lacakCountdownTimer = null;
+let lacakTampilQr = false; // area QR sudah dibuka?
+
+/** Konversi waktu SQLite UTC → "3 Des, 14.05" (WIB). */
+function formatWaktu(sql) {
+  if (!sql) return "";
+  const ms = Date.parse(String(sql).replace(" ", "T") + "Z");
+  if (!Number.isFinite(ms)) return String(sql);
+  return new Date(ms).toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  });
+}
+
+/** Kelas warna badge per status pesanan. */
+function kelasBadge(status) {
+  return status === "COMPLETED" ? "ok" : status === "PENDING" ? "warn" : status === "PAID" ? "info" : "off";
+}
+
+/* ---------- Daftar pesanan (tab Pesanan Saya) ---------- */
+async function muatPesanan() {
+  if (!DATA_ME) return;
+  const list = $("order-list");
+  if (!list) return;
+  const params = new URLSearchParams();
+  if (pesananFilter.status) params.set("status", pesananFilter.status);
+  if (pesananFilter.q) params.set("q", pesananFilter.q);
+  try {
+    const r = await fetch("/portal/member/orders?" + params.toString(), { credentials: "same-origin" });
+    if (r.status === 401) return showLogin();
+    if (!r.ok) throw new Error();
+    const d = (await r.json()).data;
+    renderStatsPesanan(d.stats);
+    renderDaftarPesanan(d.orders || []);
+  } catch {
+    list.innerHTML = '<div class="alert err">Gagal memuat daftar pesanan. Klik Segarkan untuk mencoba lagi.</div>';
+  }
+}
+
+function renderStatsPesanan(s) {
+  const box = $("order-stats");
+  if (!box) return;
+  if (!s) { box.innerHTML = ""; return; }
+  const chip = (label, n, cls) =>
+    `<div class="ostat ${cls || ""}"><b>${num(n)}</b><span>${label}</span></div>`;
+  box.innerHTML =
+    chip("Semua", s.total) +
+    chip("Menunggu Bayar", s.pending, "warn") +
+    chip("Diproses", s.paid, "info") +
+    chip("Selesai", s.completed, "ok") +
+    chip("Batal", s.cancelled, "off");
+}
+
+function renderDaftarPesanan(rows) {
+  const list = $("order-list");
+  if (!rows.length) {
+    list.innerHTML = `
+      <div class="order-empty">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+        <b>Tidak ada pesanan${pesananFilter.status || pesananFilter.q ? " pada filter ini" : " tercatat"}</b>
+        <p>Pembelian key &amp; top-up Anda akan muncul di sini beserta status pelacakannya.</p>
+        <button class="btn primary small" id="btn-pesanan-topup" type="button">Top Up Sekarang</button>
+      </div>`;
+    const b = $("btn-pesanan-topup");
+    if (b) b.onclick = bukaTopup;
+    return;
+  }
+  list.innerHTML = rows
+    .map((o) => {
+      const aksi = o.can_pay
+        ? `<button class="btn small primary" data-bayar="${esc(o.order_code)}" type="button">Bayar Sekarang</button>`
+        : "";
+      const keterangan =
+        o.status === "PENDING" && o.can_pay
+          ? "menunggu pembayaran QRIS"
+          : o.status === "PAID"
+            ? "dibayar — sedang diproses otomatis"
+            : o.status === "COMPLETED"
+              ? `selesai${o.completed_at ? " " + formatWaktu(o.completed_at) : ""}`
+              : o.note || "dibatalkan";
+      return `<article class="order-card" data-code="${esc(o.order_code)}" role="button" tabindex="0" aria-label="Lacak pesanan ${esc(o.order_code)}">
+        <div class="oc-head">
+          <span class="oc-kode mono">${esc(o.order_code)}</span>
+          <span class="tag ${kelasBadge(o.status)}">${esc(o.status_label)}</span>
+        </div>
+        <div class="oc-body">
+          <div class="oc-prod">
+            <b>${esc(o.mode_label)} · ${esc(o.package_label)} token</b>
+            <small class="muted">${num(o.quota_tokens)} token · ${esc(keterangan)}</small>
+          </div>
+          <div class="oc-amount mono">${rupiah(o.amount_to_pay)}</div>
+        </div>
+        <div class="oc-foot">
+          <span class="oc-hint">klik baris untuk melacak →</span>
+          <div class="oc-aksi">${aksi}</div>
+        </div>
+      </article>`;
+    })
+    .join("");
+}
+
+// Klik kartu → buka modal pelacakan; tombol "Bayar Sekarang" → langsung tampil QR
+$("order-list").addEventListener("click", (e) => {
+  const card = e.target.closest(".order-card");
+  if (!card) return;
+  const bayar = e.target.closest("[data-bayar]");
+  bukaLacak(card.dataset.code, { langsungBayar: !!bayar });
+});
+$("order-list").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const card = e.target.closest(".order-card");
+  if (!card) return;
+  e.preventDefault();
+  bukaLacak(card.dataset.code);
+});
+
+// Filter status (pill) + pencarian kode
+$("order-pills").addEventListener("click", (e) => {
+  const pill = e.target.closest(".pill");
+  if (!pill) return;
+  document.querySelectorAll("#order-pills .pill").forEach((p) => p.classList.toggle("active", p === pill));
+  pesananFilter.status = pill.dataset.status || "";
+  muatPesanan();
+});
+$("order-cari").addEventListener("input", () => {
+  clearTimeout(cariTimer);
+  cariTimer = setTimeout(() => {
+    pesananFilter.q = $("order-cari").value.trim();
+    muatPesanan();
+  }, 300);
+});
+
+// Baris riwayat transaksi (tab Top Up) juga bisa diklik → modal pelacakan
+$("topup-riwayat").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-code]");
+  if (!tr) return;
+  bukaLacak(tr.dataset.code);
+});
+
+/* ---------- Modal pelacakan ---------- */
+async function bukaLacak(code, opts = {}) {
+  lacakKode = String(code || "").toUpperCase();
+  lacakTampilQr = false;
+  lacakDetail = null;
+  $("trk-judul").textContent = "Lacak Pesanan " + lacakKode;
+  $("trk-msg").innerHTML = "";
+  $("trk-isi").innerHTML = '<div class="loading-box"><span class="spinner sm"></span> memuat detail pesanan…</div>';
+  $("modal-lacak").classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  hentikanLacakPolling();
+  hentikanLacakCountdown();
+  await segarkanLacak(opts);
+}
+
+function tutupLacak() {
+  lacakKode = null;
+  lacakDetail = null;
+  lacakTampilQr = false;
+  hentikanLacakPolling();
+  hentikanLacakCountdown();
+  const modal = $("modal-lacak");
+  if (modal) {
+    modal.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+}
+
+$("trk-tutup").onclick = tutupLacak;
+$("modal-lacak").addEventListener("click", (e) => {
+  if (e.target === $("modal-lacak")) tutupLacak();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("modal-lacak").classList.contains("hidden")) tutupLacak();
+});
+
+/** Ambil detail terbaru dari server lalu render ulang modal. */
+async function segarkanLacak(opts = {}) {
+  if (!lacakKode) return;
+  try {
+    const r = await fetch("/portal/member/orders/" + encodeURIComponent(lacakKode), { credentials: "same-origin" });
+    if (r.status === 401) return showLogin();
+    if (!r.ok) throw new Error();
+    const d = (await r.json()).data;
+    lacakDetail = d;
+    renderLacak(d);
+    if (opts.langsungBayar && d.can_pay) tampilQrLacak();
+  } catch {
+    $("trk-isi").innerHTML = '<div class="alert err">Gagal memuat detail pesanan. Tutup modal lalu buka lagi.</div>';
+  }
+}
+
+function renderLacak(d) {
+  const o = d.order;
+
+  // Stepper 4 langkah ala marketplace
+  const langkah = d.steps
+    .map((s, i) => {
+      const ikon = s.state === "done" ? "✓" : s.state === "failed" ? "✕" : String(i + 1);
+      const waktu = s.at ? formatWaktu(s.at) : "";
+      return `<div class="trk-step ${s.state}">
+        <span class="trk-dot">${ikon}</span>
+        <b>${esc(s.label)}</b>
+        <small>${waktu ? esc(waktu) : "&nbsp;"}</small>
+      </div>`;
+    })
+    .join("");
+
+  const kvPesanan = `
+    <div class="kv">
+      <div class="kv-row"><span>Kode Pesanan</span><b class="mono">${esc(o.order_code)}</b></div>
+      <div class="kv-row"><span>Jenis</span><b>${esc(o.mode_label)}</b></div>
+      <div class="kv-row"><span>Paket</span><b>${esc(o.package_label)} · ${num(o.quota_tokens)} token</b></div>
+      <div class="kv-row"><span>Dibuat</span><b>${esc(formatWaktu(o.created_at))}</b></div>
+      ${o.api_key_terkait ? `<div class="kv-row"><span>Key terkait</span><b class="mono">${esc(o.api_key_terkait.slice(0, 18))}…</b></div>` : ""}
+    </div>`;
+
+  const barisBayar = [
+    `<div class="kv-row"><span>Metode</span><b>${esc(o.payment_method)}</b></div>`,
+    `<div class="kv-row"><span>Harga paket</span><b>${rupiah(o.base_amount)}</b></div>`,
+    `<div class="kv-row"><span>Kode unik pesanan</span><b>+${num(o.unique_code)}</b></div>`,
+    `<div class="kv-row"><span>Total tagihan</span><b class="ok">${rupiah(o.amount_to_pay)}</b></div>`,
+  ];
+  if (o.paid_at) barisBayar.push(`<div class="kv-row"><span>Dibayar pada</span><b>${esc(formatWaktu(o.paid_at))}</b></div>`);
+  if (o.completed_at) barisBayar.push(`<div class="kv-row"><span>Selesai pada</span><b>${esc(formatWaktu(o.completed_at))}</b></div>`);
+  if (o.status === "PENDING") barisBayar.push(`<div class="kv-row"><span>Bayar sebelum</span><b id="trk-countdown">—</b></div>`);
+  const kvBayar = `<div class="kv">${barisBayar.join("")}</div>`;
+
+  // Kartu sukses ala marketplace (bila pesanan selesai)
+  const sukses =
+    o.status === "COMPLETED"
+      ? `<div class="box-info">
+          ${o.mode === "topup"
+            ? `Kuota <b>+${num(o.quota_tokens)} token</b> sudah masuk ke key Anda${d.masa_aktif_sampai ? ` — masa aktif diperpanjang s.d. <b>${esc(d.masa_aktif_sampai)}</b>` : ""}.`
+            : `API Key baru sudah diterbitkan &amp; aktif${d.masa_aktif_sampai ? ` — masa aktif s.d. <b>${esc(d.masa_aktif_sampai)}</b>` : ""}.`}
+        </div>`
+      : "";
+
+  // Area QR lanjutan bayar (muncul bila tombol "Bayar Sekarang" ditekan)
+  const qrArea = d.can_pay
+    ? `<div id="trk-qr-wrap" class="${lacakTampilQr ? "" : "hidden"}" style="margin-bottom:6px">
+        ${d.qr_image
+          ? `<div class="qr-frame"><img src="${d.qr_image}" alt="QRIS pembayaran" /></div>
+             <p class="qr-caption">Scan dengan <b>DANA</b>, GoPay, OVO, ShopeePay, atau m-banking apa pun — nominal harus <b>PERSIS ${rupiah(o.amount_to_pay)}</b></p>`
+          : `<div class="alert warn">QR tidak dapat ditampilkan saat ini (QRIS toko belum aktif). Hubungi admin atau bayar manual dengan kode unik +${num(o.unique_code)}.</div>`}
+      </div>`
+    : "";
+
+  const timeline = d.timeline.length
+    ? `<h3 class="trk-sub">Linimasa Pesanan</h3>
+       <div class="timeline">${d.timeline
+         .map(
+           (ev) => `
+        <div class="tl-item">
+          <span class="tl-dot ${esc(ev.type)}"></span>
+          <div class="tl-head"><b>${esc(ev.label)}</b><span class="tag plain">${esc(ev.actor)}</span><span class="muted mono" style="font-size:11px">${esc(formatWaktu(ev.created_at))}</span></div>
+          ${ev.detail ? `<div class="tl-detail">${esc(ev.detail)}</div>` : ""}
+        </div>`
+         )
+         .join("")}</div>`
+    : "";
+
+  // Aksi sesuai status
+  const aksi = [];
+  if (d.can_pay && !lacakTampilQr) aksi.push(`<button class="btn primary" id="trk-bayar" type="button">Bayar Sekarang</button>`);
+  if (d.can_cancel) aksi.push(`<button class="btn danger" id="trk-batal" type="button">Batalkan Pesanan</button>`);
+  if (o.status === "COMPLETED") aksi.push(`<button class="btn" id="trk-refresh" type="button">Segarkan Dashboard</button>`);
+  if (o.status === "CANCELLED") aksi.push(`<button class="btn primary" id="trk-ulang" type="button">Buat Pesanan Baru</button>`);
+
+  $("trk-isi").innerHTML = `
+    <div class="trk-status">
+      <span class="tag ${kelasBadge(o.status)}" style="font-size:12px">${esc(o.status_label)}</span>
+      ${o.note && o.status === "CANCELLED" ? `<span class="muted" style="font-size:12.5px">${esc(o.note)}</span>` : ""}
+    </div>
+    <div class="trk-steps">${langkah}</div>
+    ${sukses}
+    ${qrArea}
+    <h3 class="trk-sub">Info Pesanan</h3>
+    ${kvPesanan}
+    <h3 class="trk-sub">Pembayaran</h3>
+    ${kvBayar}
+    ${timeline}
+    ${aksi.length ? `<div class="row-actions">${aksi.join("")}</div>` : ""}`;
+
+  const bayar = $("trk-bayar");
+  if (bayar) bayar.onclick = tampilQrLacak;
+  const batal = $("trk-batal");
+  if (batal) batal.onclick = batalkanLacak;
+  const segar = $("trk-refresh");
+  if (segar) segar.onclick = async () => { await boot(); tutupLacak(); };
+  const ulang = $("trk-ulang");
+  if (ulang) ulang.onclick = () => { tutupLacak(); bukaTopup(); };
+
+  if (o.status === "PENDING") {
+    mulaiLacakCountdown();
+    mulaiLacakPolling();
+  } else {
+    hentikanLacakCountdown();
+    hentikanLacakPolling();
+  }
+}
+
+/** Tampilkan area QR di modal (pesanan masih bisa dibayar). */
+function tampilQrLacak() {
+  lacakTampilQr = true;
+  const wrap = $("trk-qr-wrap");
+  if (wrap) wrap.classList.remove("hidden");
+  const bayar = $("trk-bayar");
+  if (bayar) bayar.remove(); // tombol tak perlu lagi
+}
+
+/* ---------- Countdown & polling status di modal ---------- */
+function mulaiLacakCountdown() {
+  hentikanLacakCountdown();
+  const perbarui = () => {
+    const el = $("trk-countdown");
+    if (!el || !lacakDetail) return;
+    const sisa = Math.max(0, lacakDetail.order.expires_at - Date.now());
+    const m = Math.floor(sisa / 60000);
+    const s = Math.floor((sisa % 60000) / 1000);
+    el.textContent = `${m}mnt ${String(s).padStart(2, "0")}dtk`;
+    if (sisa <= 0) {
+      hentikanLacakCountdown();
+      hentikanLacakPolling();
+      segarkanLacak(); // kedaluwarsa → server menandai CANCELLED, modal ikut terbarui
+    }
+  };
+  perbarui();
+  lacakCountdownTimer = setInterval(perbarui, 1000);
+}
+
+function hentikanLacakCountdown() {
+  if (lacakCountdownTimer) { clearInterval(lacakCountdownTimer); lacakCountdownTimer = null; }
+}
+
+function mulaiLacakPolling() {
+  hentikanLacakPolling();
+  lacakPollTimer = setInterval(async () => {
+    if (lacakPolling || !lacakKode) return;
+    lacakPolling = true;
+    try {
+      const r = await fetch("/portal/member/orders/" + encodeURIComponent(lacakKode), { credentials: "same-origin" });
+      if (!r.ok) return;
+      const d = (await r.json()).data;
+      const sebelum = lacakDetail ? lacakDetail.order.status : null;
+      lacakDetail = d;
+      if (d.order.status !== sebelum) {
+        renderLacak(d);
+        muatPesanan();
+        muatRiwayatTopup();
+        if (d.order.status === "COMPLETED") {
+          boot(); // kuota & masa aktif baru langsung tampil di dashboard
+          $("trk-msg").innerHTML = '<div class="alert ok">Pembayaran diterima — pesanan selesai! Dashboard sudah diperbarui otomatis.</div>';
+        }
+      }
+    } catch {
+      /* jaringan gagal sesaat → coba lagi di tick berikutnya */
+    } finally {
+      lacakPolling = false;
+    }
+  }, 5000);
+}
+
+function hentikanLacakPolling() {
+  if (lacakPollTimer) { clearInterval(lacakPollTimer); lacakPollTimer = null; }
+}
+
+/** Batalkan pesanan milik sendiri dari modal (hanya Menunggu Bayar). */
+async function batalkanLacak() {
+  if (!lacakKode) return;
+  try {
+    const r = await fetch(`/portal/member/orders/${encodeURIComponent(lacakKode)}/cancel`, {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || "Gagal membatalkan pesanan.");
+    hentikanLacakPolling();
+    hentikanLacakCountdown();
+    $("trk-msg").innerHTML = '<div class="alert warn">Pesanan dibatalkan. Kode unik dilepas & bisa dipakai pesanan baru.</div>';
+    await segarkanLacak();
+    muatPesanan();
+    muatRiwayatTopup();
+  } catch (err) {
+    $("trk-msg").innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
+  }
 }
 
 // Tangkap error boot() agar tidak menjadi "unhandled promise rejection".

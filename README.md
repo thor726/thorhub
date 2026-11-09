@@ -273,6 +273,20 @@ Juga tersedia tombol **Tampilkan** key, **Salin** key, contoh kode siap pakai, d
 Member **tetap bisa login** meski key dinonaktifkan atau kuota habis, supaya bisa melihat status
 dan menghubungi admin. Bila key dihapus admin, sesi member otomatis ditutup saat refresh.
 
+**Tab Top Up & Pesanan Saya (pelacakan ala e-commerce):**
+
+- **Top Up** — beli kuota langsung dari dashboard: pilih paket → QR QRIS tampil →
+  polling otomatis → kuota & masa aktif (+25 hari) masuk begitu DANA terkonfirmasi.
+- **Pesanan Saya** — semua pembelian & top-up di satu tempat, seperti belanja di marketplace:
+  - Chip statistik (Semua / Menunggu Bayar / Diproses / Selesai / Batal) + filter status + pencarian kode pesanan
+  - Klik kartu pesanan → **modal pelacakan**: *stepper* 4 langkah (Dibuat → Pembayaran → Diproses → Selesai)
+    dengan waktu tiap langkah, info pesanan & pembayaran, serta **linimasa lengkap** (order_events)
+  - Pesanan *Menunggu Bayar* → tombol **Bayar Sekarang** (QR dibangun ulang, countdown, polling 5 dtk)
+    dan **Batalkan Pesanan** mandiri — tanpa perlu menyimpan access_token dari halaman /beli
+  - Isolasi ketat: member hanya melihat pesanan miliknya (top-up ke key sendiri atau key_baru
+    yang menerbitkan key-nya); pesanan member lain → 404
+- Baris pada **Riwayat Transaksi** (tab Top Up) juga bisa diklik untuk membuka modal pelacakan yang sama.
+
 ### 6.4 Panel Admin — `/admin`
 
 Login memakai `ADMIN_PASSWORD`. Setelah masuk, tersedia:

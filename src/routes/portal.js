@@ -439,6 +439,7 @@ router.post("/admin/store/test", requireAdminSession, (req, res) => {
 // ---------------------------------------------------------------
 const pesananLib = require("../lib/pesanan");
 const notifyLib = require("../lib/notify");
+const paymentLib = require("../lib/payment");
 
 const STATUS_VALID = new Set(["PENDING", "PAID", "COMPLETED", "CANCELLED"]);
 
@@ -712,10 +713,180 @@ router.get("/member/me", requireMemberSession, (req, res) => {
   });
 });
 
-// GET /portal/member/orders — riwayat transaksi milik member ini (top-up ke
-// key miliknya ATAU pesanan key_baru yang menerbitkan key miliknya).
-// Dipakai tab Top Up di dashboard member agar pembeli bisa melacak pembayarannya
-// seperti di toko online tanpa bisa melihat pesanan member lain.
+// ---------------------------------------------------------------
+// MEMBER — PELACAKAN PESANAN (ala e-commerce besar)
+// Member melihat HANYA pesanan miliknya (top-up ke key-nya sendiri
+// ATAU pesanan key_baru yang menerbitkan key-nya). Semua endpoint
+// memakai sesi cookie member — tidak ada access_token yang perlu
+// disimpan, tidak ada data member lain yang bocor.
+// ---------------------------------------------------------------
+
+/** Order ini milik member dengan apiKey ini? */
+function milikMember(order, apiKey) {
+  return (
+    order.target_api_key === apiKey ||
+    (order.mode === "key_baru" && order.api_key_issued === apiKey)
+  );
+}
+
+/** Label paket yang ramah ("20 Juta") dari package_id ("20m"). */
+function labelPaket(packageId) {
+  const p = storeLib.PACKAGES.find((x) => x.id === packageId);
+  return p ? p.label : packageId;
+}
+
+/** Label event linimasa versi pembeli (bukan istilah internal admin). */
+const LABEL_EVENT_MEMBER = {
+  dibuat: "Pesanan dibuat",
+  webhook: "Notifikasi pembayaran masuk",
+  lunas: "Pembayaran diterima",
+  fulfillment: "Pesanan diproses",
+  notifikasi: "Struk & konfirmasi dikirim",
+  admin: "Diperbarui oleh admin",
+  batal: "Pesanan dibatalkan",
+  info: "Catatan",
+};
+
+const LABEL_ACTOR_MEMBER = {
+  sistem: "Sistem",
+  webhook: "Otomatis (DANA)",
+  admin: "Admin",
+  pembeli: "Anda",
+};
+
+/** Bersihkan detail event agar layak dilihat member: klausa internal
+ *  admin (mis. status WA ke admin) dibuang, sisanya tetap informatif. */
+function detailUntukMember(ev) {
+  let detail = String(ev.detail || "");
+  if (ev.type === "notifikasi") {
+    detail = detail
+      .split(" · ")
+      .filter((seg) => !/wa admin/i.test(seg))
+      .join(" · ");
+  }
+  // Slice API key milik member sendiri — tampilkan penuh saja agar jelas.
+  return detail;
+}
+
+/** Empat langkah pelacakan gaya marketplace (dipakai stepper frontend).
+ *  state: done | current | pending | failed */
+function langkahPelacakan(order) {
+  const batal = order.status === "CANCELLED";
+  const selesai = order.status === "COMPLETED";
+  const dibayar = !!order.paid_at; // PAID atau COMPLETED
+  return [
+    { key: "dibuat", label: "Pesanan Dibuat", at: order.created_at, state: "done" },
+    {
+      key: "bayar",
+      label: dibayar ? "Pembayaran Diterima" : "Pembayaran",
+      at: order.paid_at || null,
+      state: dibayar ? "done" : batal ? "failed" : "current",
+    },
+    {
+      key: "proses",
+      label: order.mode === "topup" ? "Kuota Ditambahkan" : "Key Diterbitkan",
+      at: order.completed_at || null,
+      state: selesai ? "done" : dibayar ? "current" : batal ? "failed" : "pending",
+    },
+    {
+      key: "selesai",
+      label: batal ? "Dibatalkan" : "Selesai",
+      at: selesai ? order.completed_at : null,
+      state: selesai ? "done" : batal ? "failed" : "pending",
+    },
+  ];
+}
+
+/** Susun payload detail satu pesanan versi member (terverifikasi milik). */
+async function payloadDetailMember(order, apiKey) {
+  // Pesanan PENDING yang kedaluwarsa di-ralat dulu (PENDING → CANCELLED)
+  // supaya pelacakan member selalu menampilkan status terkini.
+  paymentLib.expireStaleOrders();
+  const segar = db.prepare("SELECT * FROM orders WHERE id = ?").get(order.id);
+  const o = segar || order;
+
+  const canPay = o.status === "PENDING" && o.expires_at >= Date.now();
+  const canCancel = o.status === "PENDING";
+
+  // QR dibangun ulang on-the-fly untuk pesanan yang masih bisa dibayar —
+  // member tidak perlu menyimpan access_token lama dari halaman /beli.
+  let qrImage = "";
+  if (canPay) {
+    const q = storeLib.getQrisSettings();
+    if (q.enabled && q.static && q.secret) {
+      try {
+        const dynamic = qrisLib.buildDynamicQris(q.static, o.amount_to_pay);
+        qrImage = await qrisLib.qrisToDataUrl(dynamic, 512);
+      } catch {
+        /* QR gagal dibangun → respons lanjut tanpa qr_image */
+      }
+    }
+  }
+
+  // Masa aktif key terkait (baru diterbitkan / diperpanjang) bila selesai.
+  let masaAktifSampai = null;
+  if (o.status === "COMPLETED") {
+    const apiK = o.mode === "key_baru" ? o.api_key_issued : o.target_api_key;
+    const expMs = masaAktif.expiryMs(masaAktif.expiryKeyDariDb(apiK));
+    if (expMs != null) masaAktifSampai = masaAktif.formatWaktuIndo(expMs);
+  }
+
+  const timeline = pesananLib.riwayat(o.id).map((ev) => ({
+    type: ev.type,
+    label: LABEL_EVENT_MEMBER[ev.type] || "Catatan",
+    actor: LABEL_ACTOR_MEMBER[ev.actor] || ev.actor,
+    detail: detailUntukMember(ev),
+    created_at: ev.created_at,
+  }));
+
+  return {
+    order: {
+      order_code: o.order_code,
+      mode: o.mode,
+      mode_label: o.mode === "key_baru" ? "Pembelian Key Baru" : "Top-up Kuota",
+      package_id: o.package_id,
+      package_label: labelPaket(o.package_id),
+      quota_tokens: o.quota_tokens,
+      user_name: o.user_name,
+      base_amount: o.base_amount,
+      unique_code: o.unique_code,
+      amount_to_pay: o.amount_to_pay,
+      payment_method: o.payment_method,
+      status: o.status,
+      status_label: LABEL_STATUS[o.status] || o.status,
+      note: o.note,
+      created_at: o.created_at,
+      paid_at: o.paid_at,
+      completed_at: o.completed_at,
+      expires_at: o.expires_at,
+      // Untuk mode key_baru, key yang diterbitkan ADALAH key milik member
+      // (ia login dengan key itu) — aman ditampilkan.
+      api_key_terkait: o.mode === "key_baru" ? o.api_key_issued : o.target_api_key,
+    },
+    steps: langkahPelacakan(o),
+    timeline,
+    can_pay: canPay,
+    can_cancel: canCancel,
+    qr_image: qrImage,
+    masa_aktif_sampai: masaAktifSampai,
+    server_now: Date.now(),
+  };
+}
+
+/** Cari pesanan milik member by kode; 404-generik bila bukan miliknya. */
+function pesananMemberAtau404(req, res, apiKey) {
+  const code = String(req.params.code || "").trim().toUpperCase();
+  const order = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(code);
+  if (!order || !milikMember(order, apiKey)) {
+    res.status(404).json({ error: { message: "Pesanan tidak ditemukan.", code: "not_found" } });
+    return null;
+  }
+  return order;
+}
+
+// GET /portal/member/orders — daftar pesanan milik member ini.
+// Query: ?status=PENDING|PAID|COMPLETED|CANCELLED&q=<kode>&limit&offset
+// Disertai stats per status (chip ala marketplace) & flag can_pay.
 router.get("/member/orders", requireMemberSession, (req, res) => {
   const row = db.prepare("SELECT id, api_key FROM api_keys WHERE api_key = ?").get(req.session.api_key);
   if (!row) {
@@ -723,22 +894,107 @@ router.get("/member/orders", requireMemberSession, (req, res) => {
     return res.status(401).json({ error: { message: "Key Anda sudah tidak terdaftar.", code: "invalid_api_key" } });
   }
 
+  // Segarkan dulu pesanan kedaluwarsa agar status daftar akurat.
+  paymentLib.expireStaleOrders();
+
+  const status = String(req.query.status || "").trim().toUpperCase();
+  const q = String(req.query.q || "").trim().slice(0, 40).toUpperCase();
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+
+  const milik = "(target_api_key = ? OR (mode = 'key_baru' AND api_key_issued = ?))";
+  const where = [milik];
+  const args = [row.api_key, row.api_key];
+  if (STATUS_VALID.has(status)) {
+    where.push("status = ?");
+    args.push(status);
+  }
+  if (q) {
+    where.push("order_code LIKE ?");
+    args.push(`%${q}%`);
+  }
+  const klausa = `WHERE ${where.join(" AND ")}`;
+
   const rows = db
     .prepare(
       `SELECT order_code, mode, package_id, quota_tokens, base_amount, unique_code, amount_to_pay,
-              payment_method, status, note, created_at, paid_at, completed_at
-       FROM orders
-       WHERE target_api_key = ? OR (mode = 'key_baru' AND api_key_issued = ?)
-       ORDER BY id DESC
-       LIMIT 25`
+              payment_method, status, note, created_at, paid_at, completed_at, expires_at
+       FROM orders ${klausa}
+       ORDER BY id DESC LIMIT ? OFFSET ?`
     )
-    .all(row.api_key, row.api_key);
+    .all(...args, limit, offset);
+
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM orders ${klausa}`).get(...args).n;
+
+  // Statistik milik member ini (tidak terpengaruh filter) — untuk chip.
+  const perStatus = db
+    .prepare(
+      `SELECT status, COUNT(*) AS n FROM orders WHERE ${milik} GROUP BY status`
+    )
+    .all(row.api_key, row.api_key)
+    .reduce((acc, r) => ((acc[r.status] = r.n), acc), {});
+  const totalSemua = Object.values(perStatus).reduce((a, b) => a + b, 0);
 
   res.json({
     data: {
-      orders: rows.map((o) => ({ ...o, status_label: LABEL_STATUS[o.status] || o.status })),
+      orders: rows.map((o) => ({
+        ...o,
+        status_label: LABEL_STATUS[o.status] || o.status,
+        package_label: labelPaket(o.package_id),
+        mode_label: o.mode === "key_baru" ? "Pembelian Key Baru" : "Top-up Kuota",
+        can_pay: o.status === "PENDING" && o.expires_at >= Date.now(),
+      })),
+      stats: {
+        total: totalSemua,
+        pending: perStatus.PENDING || 0,
+        paid: perStatus.PAID || 0,
+        completed: perStatus.COMPLETED || 0,
+        cancelled: perStatus.CANCELLED || 0,
+      },
+      paging: { total, limit, offset },
     },
   });
+});
+
+// GET /portal/member/orders/:code — detail + langkah + linimasa + QR bila
+// masih bisa dibayar. Pesanan member lain → 404 (tanpa membocorkan ada/tidak).
+router.get("/member/orders/:code", requireMemberSession, async (req, res) => {
+  const row = db.prepare("SELECT id, api_key FROM api_keys WHERE api_key = ?").get(req.session.api_key);
+  if (!row) {
+    session.destroySession(session.parseCookies(req.headers.cookie)[session.MEMBER_COOKIE]);
+    return res.status(401).json({ error: { message: "Key Anda sudah tidak terdaftar.", code: "invalid_api_key" } });
+  }
+  const order = pesananMemberAtau404(req, res, row.api_key);
+  if (!order) return;
+  const payload = await payloadDetailMember(order, row.api_key);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ data: payload });
+});
+
+// POST /portal/member/orders/:code/cancel — pembeli batalkan sendiri
+// pesanan Menunggu Bayar miliknya dari dashboard (ala e-commerce).
+router.post("/member/orders/:code/cancel", requireMemberSession, (req, res) => {
+  const row = db.prepare("SELECT id, api_key FROM api_keys WHERE api_key = ?").get(req.session.api_key);
+  if (!row) {
+    session.destroySession(session.parseCookies(req.headers.cookie)[session.MEMBER_COOKIE]);
+    return res.status(401).json({ error: { message: "Key Anda sudah tidak terdaftar.", code: "invalid_api_key" } });
+  }
+  const order = pesananMemberAtau404(req, res, row.api_key);
+  if (!order) return;
+  if (order.status !== "PENDING") {
+    return res.status(409).json({
+      error: { message: `Hanya pesanan Menunggu Bayar yang bisa dibatalkan (status sekarang: ${LABEL_STATUS[order.status] || order.status}).`, code: "not_cancellable" },
+    });
+  }
+  const r = db
+    .prepare(`UPDATE orders SET status = 'CANCELLED', note = 'dibatalkan pembeli (portal member)' WHERE id = ? AND status = 'PENDING'`)
+    .run(order.id);
+  if (r.changes === 0) {
+    return res.status(409).json({ error: { message: "Pesanan sudah diproses / tidak bisa dibatalkan.", code: "not_cancellable" } });
+  }
+  pesananLib.catatEvent(order.id, "batal", "pembeli", "Pesanan dibatalkan oleh pembeli dari dashboard member.");
+  const final = db.prepare("SELECT * FROM orders WHERE id = ?").get(order.id);
+  res.json({ data: { cancelled: true, status: final.status, status_label: LABEL_STATUS[final.status] } });
 });
 
 // GET /portal/member/usage — pemakaian per model, harian (30 hari), dan log terakhir

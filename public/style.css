@@ -1100,8 +1100,12 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   position: fixed;
   inset: 0;
   z-index: 200;
-  display: grid;
-  place-items: center;
+  /* flex + margin:auto pada .modal = pola dialog yang selalu bisa digulir:
+     modal pendek → tetap di tengah; modal tinggi (mis. pelacakan dengan
+     linimasa panjang) → menyentuh atas & seluruh isi bisa digulir. */
+  display: flex;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: var(--s-4);
   background: rgba(0, 0, 0, .7);
   backdrop-filter: blur(4px);
@@ -1113,6 +1117,7 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   max-width: 720px;
   max-height: 86vh;
   max-height: 86dvh;
+  margin: auto; /* pusatkan bila muat; bila tidak, merapat ke atas agar bisa digulir */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--card);
@@ -2053,4 +2058,129 @@ img, svg { max-width: 100%; height: auto; }
   border-radius: 6px;
   font-size: 12.5px;
   word-break: break-all;
+}
+
+/* ================================================================
+ * PESANAN SAYA (member) — daftar & pelacakan ala marketplace besar
+ * ================================================================ */
+
+/* Chip statistik di atas daftar */
+.order-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 16px; }
+.ostat {
+  flex: 1 1 96px;
+  border: 1px solid var(--border-2);
+  background: var(--card-hov);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  animation: fadeUp .3s var(--ease) both;
+}
+.ostat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+.ostat span { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.ostat.warn b { color: var(--amber); }
+.ostat.info b { color: #93c5fd; }
+.ostat.ok b { color: var(--lime); }
+.ostat.off b { color: var(--muted-2); }
+
+/* Filter pill + pencarian */
+.order-filter { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.pill-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill {
+  border: 1px solid var(--border-2);
+  background: transparent;
+  color: var(--text-body);
+  font-size: 12.5px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--t) ease;
+  min-height: var(--touch);
+}
+.pill:hover { border-color: var(--muted-2); }
+.pill.active { background: var(--lime-bg); border-color: var(--lime-line); color: var(--lime); font-weight: 600; }
+.order-filter input[type="search"] { flex: 1 1 180px; min-width: 160px; margin: 0; }
+
+/* Daftar kartu pesanan */
+.order-list { display: flex; flex-direction: column; gap: 10px; }
+.order-card {
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  background: var(--card-hov);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color var(--t) ease, transform var(--t) ease;
+  animation: fadeUp .3s var(--ease) both;
+}
+.order-card:hover { border-color: var(--lime-line); transform: translateY(-1px); }
+.order-card:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+.oc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.oc-kode { font-size: 12px; color: var(--muted); }
+.oc-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 6px; }
+.oc-prod b { font-size: 14px; }
+.oc-prod small { display: block; margin-top: 2px; font-size: 11.5px; }
+.oc-amount { font-weight: 700; color: var(--lime); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.oc-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.oc-hint { font-size: 11.5px; color: var(--muted); }
+.oc-aksi { display: flex; gap: 8px; }
+.order-empty { text-align: center; padding: 34px 16px; color: var(--muted); }
+.order-empty .ico { width: 34px; height: 34px; color: var(--muted-2); }
+.order-empty b { display: block; margin: 10px 0 4px; color: var(--text); }
+.order-empty p { margin: 0 0 14px; font-size: 13px; }
+
+/* Baris riwayat transaksi bisa diklik → lacak */
+tr.row-lacak { cursor: pointer; }
+tr.row-lacak:hover td { background: var(--card-hov); }
+
+/* Stepper pelacakan 4 langkah di modal */
+.trk-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.trk-steps { display: flex; margin: 4px 0 16px; }
+.trk-step { flex: 1; text-align: center; position: relative; min-width: 0; }
+.trk-step::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border-2);
+  z-index: 0;
+}
+.trk-step:first-child::before { display: none; }
+.trk-step.done::before { background: var(--lime); }
+.trk-dot {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--border-2);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.trk-step.done .trk-dot { border-color: var(--lime); color: var(--lime); background: var(--lime-bg); }
+.trk-step.current .trk-dot { border-color: var(--lime); color: var(--lime); animation: trkPulse 1.6s ease infinite; }
+.trk-step.failed .trk-dot { border-color: var(--red); color: #ff9c9c; background: var(--red-bg); }
+.trk-step b { display: block; margin-top: 6px; font-size: 11.5px; line-height: 1.25; color: var(--text); }
+.trk-step.pending b { color: var(--muted); }
+.trk-step small { display: block; font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+@keyframes trkPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(163, 230, 53, .35); }
+  50% { box-shadow: 0 0 0 6px rgba(163, 230, 53, 0); }
+}
+.trk-sub {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-family: var(--mono);
+  margin: 16px 0 8px;
+}
+@media (max-width: 560px) {
+  .trk-step b { font-size: 10px; }
+  .trk-step small { display: none; }
+  .ostat { flex: 1 1 84px; padding: 8px 10px; }
 }

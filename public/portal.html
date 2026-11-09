@@ -145,6 +145,10 @@
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/><rect x="2" y="3" width="20" height="18" rx="2"/></svg>
           Top Up
         </button>
+        <button class="tab" data-tab="pesanan" role="tab">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+          Pesanan Saya
+        </button>
         <button class="tab" data-tab="pemakaian" role="tab">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
           Pemakaian
@@ -276,13 +280,13 @@
         <!-- Langkah 3: selesai -->
         <div class="card hidden" id="topup-selesai"></div>
 
-        <!-- Riwayat transaksi -->
+        <!-- Riwayat transaksi (klik baris → pelacakan lengkap) -->
         <div class="card">
           <h2>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
             Riwayat Transaksi
           </h2>
-          <p class="muted" style="margin-top:0;font-size:13px">25 transaksi terakhir yang terkait dengan key Anda — pembelian key &amp; top-up.</p>
+          <p class="muted" style="margin-top:0;font-size:13px">Klik baris untuk <b>melacak pesanan</b> — linimasa, pembayaran &amp; status. Pelacakan lengkap ada di tab <b>Pesanan Saya</b>.</p>
           <div class="table-scroll">
             <table class="models-table">
               <thead>
@@ -292,6 +296,34 @@
                 <tr><td colspan="6"><div class="loading-box"><span class="spinner sm"></span> memuat…</div></td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Pesanan Saya (pelacakan ala marketplace) -->
+      <div class="tab-panel" id="tab-pesanan">
+        <div class="card">
+          <h2>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+            Pesanan Saya
+          </h2>
+          <p class="muted" style="margin-top:0;font-size:13px">
+            Semua pembelian &amp; top-up Anda di satu tempat — lacak status seperti belanja di marketplace:
+            linimasa pembayaran, nominal, struk, hingga kuota masuk otomatis.
+          </p>
+          <div class="order-stats" id="order-stats"></div>
+          <div class="order-filter">
+            <div class="pill-group" id="order-pills" role="group" aria-label="Filter status pesanan">
+              <button class="pill active" data-status="" type="button">Semua</button>
+              <button class="pill" data-status="PENDING" type="button">Menunggu Bayar</button>
+              <button class="pill" data-status="PAID" type="button">Diproses</button>
+              <button class="pill" data-status="COMPLETED" type="button">Selesai</button>
+              <button class="pill" data-status="CANCELLED" type="button">Batal</button>
+            </div>
+            <input id="order-cari" type="search" placeholder="Cari kode pesanan… (THX-…)" autocomplete="off" />
+          </div>
+          <div class="order-list" id="order-list">
+            <div class="loading-box"><span class="spinner sm"></span> memuat pesanan…</div>
           </div>
         </div>
       </div>
@@ -570,6 +602,18 @@
           <p class="muted" style="margin-top:0;font-size:13px">ThorHub juga meneruskan format Anthropic di <code>/v1/messages</code>.</p>
           <div class="cmd"><pre id="anthropic-example">…</pre><button class="btn small" data-copy="#anthropic-example">Salin</button></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Modal pelacakan pesanan (ala e-commerce: stepper + linimasa + bayar) -->
+    <div class="modal-back hidden" id="modal-lacak">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="trk-judul">
+        <div class="modal-head">
+          <h2 id="trk-judul">Lacak Pesanan</h2>
+          <button class="btn small" id="trk-tutup" type="button" aria-label="Tutup">✕</button>
+        </div>
+        <div id="trk-isi"></div>
+        <div id="trk-msg"></div>
       </div>
     </div>
   </main>
