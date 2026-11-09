@@ -22,7 +22,11 @@ function initTabs() {
   const panels = document.querySelectorAll(".tab-panel");
   if (!tabs.length) return;
 
-  function activate(name, { scroll = true } = {}) {
+  /** Label pendek tab untuk breadcrumb & URL (diambil dari teks tombol). */
+  const labelTab = {};
+  tabs.forEach((t) => (labelTab[t.dataset.tab] = t.textContent.replace(/\s+/g, " ").trim()));
+
+  function activate(name, { scroll = true, push = true } = {}) {
     tabs.forEach((t) => {
       const on = t.dataset.tab === name;
       t.classList.toggle("active", on);
@@ -35,9 +39,14 @@ function initTabs() {
       const el = $(`panel-${name}`);
       if (el) window.scrollTo({ top: el.offsetTop - 90, behavior: "smooth" });
     }
-    // Simpan pilihan; juga dukung deep-link ?tab=sdk
-    try { history.replaceState(null, "", `?tab=${name}`);
-      // Simpan di sessionStorage agar tetap saat refresh
+    // URL slug ala Thor-market: setiap bagian punya alamat sendiri
+    // (/docs/sdk, /docs/referensi, …) — bisa di-bookmark & tombol Kembali
+    // browser berpindah bagian dengan wajar. ?tab= lama tetap didukung.
+    const bc = $("bc-docs");
+    if (bc) bc.textContent = labelTab[name] || "Dokumentasi API";
+    try {
+      if (push) history.pushState({ tab: name }, "", `/docs/${name}`);
+      // Simpan pilihan agar tetap saat refresh (tab kini juga ada di URL)
       sessionStorage.setItem("docs-tab", name);
     } catch { /* abaikan (mode privasi) */ }
   }
@@ -53,13 +62,27 @@ function initTabs() {
     });
   });
 
-  // Tentukan tab awal: dari URL → sessionStorage → default "mulai"
+  // Tombol Kembali/Maju browser → tampilkan bagian sesuai URL (tanpa push)
+  window.addEventListener("popstate", () => {
+    const slug = slugDariUrl();
+    if (slug && labelTab[slug]) activate(slug, { scroll: false, push: false });
+  });
+
+  // Tentukan tab awal: dari slug URL → ?tab= (kompatibel lama) →
+  // sessionStorage → default "mulai".
   // Catatan: daftar model TIDAK lagi jadi tab (selalu tampil di atas).
-  const fromUrl = new URLSearchParams(location.search).get("tab");
-  const saved = sessionStorage.getItem("docs-tab");
   const valid = [...tabs].map((t) => t.dataset.tab);
+  const slug = slugDariUrl();
+  const fromUrl = slug && valid.includes(slug) ? slug : new URLSearchParams(location.search).get("tab");
+  const saved = sessionStorage.getItem("docs-tab");
   const start = [fromUrl, saved, "mulai"].find((n) => n && valid.includes(n)) || "mulai";
-  activate(start, { scroll: false });
+  activate(start, { scroll: false, push: false });
+}
+
+/** Baca slug bagian dari path URL (/docs/sdk → "sdk"). */
+function slugDariUrl() {
+  const m = location.pathname.match(/^\/docs\/([a-z0-9-]+)\/?$/i);
+  return m ? m[1].toLowerCase() : "";
 }
 
 // ==============================================================
@@ -181,26 +204,26 @@ echo $resp["choices"][0]["message"]["content"];`);
 `package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
+        "bytes"
+        "encoding/json"
+        "fmt"
+        "io"
+        "net/http"
 )
 
 func main() {
-	body, _ := json.Marshal(map[string]any{
-		"model":    "${m}",
-		"messages": []map[string]string{{"role": "user", "content": "Halo!"}},
-	})
-	req, _ := http.NewRequest("POST", "${V1}/chat/completions", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer ${KEY}")
-	req.Header.Set("Content-Type", "application/json")
+        body, _ := json.Marshal(map[string]any{
+                "model":    "${m}",
+                "messages": []map[string]string{{"role": "user", "content": "Halo!"}},
+        })
+        req, _ := http.NewRequest("POST", "${V1}/chat/completions", bytes.NewReader(body))
+        req.Header.Set("Authorization", "Bearer ${KEY}")
+        req.Header.Set("Content-Type", "application/json")
 
-	res, _ := http.DefaultClient.Do(req)
-	defer res.Body.Close()
-	out, _ := io.ReadAll(res.Body)
-	fmt.Println(string(out))
+        res, _ := http.DefaultClient.Do(req)
+        defer res.Body.Close()
+        out, _ := io.ReadAll(res.Body)
+        fmt.Println(string(out))
 }`);
 
   // --- VS Code terminal ---

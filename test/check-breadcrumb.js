@@ -31,7 +31,7 @@ function cek(nama, kondisi, detail = "") {
 
   console.log("[1] Halaman statis");
   for (const [path, harus] of [
-    ["/docs", "Beranda / Dokumentasi API"],
+    ["/docs", "Beranda / Mulai Cepat"], // docs.js kini dinamis: segmen terakhir = bagian aktif
     ["/login-member.html", "Beranda / Portal Member / Masuk"],
     ["/login-admin.html", "Beranda / Panel Admin / Masuk"],
     ["/halaman-tidak-ada-xyz", "Beranda / Halaman Tidak Ditemukan"],

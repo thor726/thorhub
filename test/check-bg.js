@@ -58,7 +58,7 @@ const attr = svgDibuat.attrs;
 
 cek("class = cc-bg-svg", attr.class === "cc-bg-svg");
 cek("aria-hidden = true", attr["aria-hidden"] === "true");
-cek("viewBox benar", attr.viewBox === "0 0 1600 1000", attr.viewBox);
+cek("viewBox benar", attr.viewBox === "0 0 2000 1250", attr.viewBox);
 cek("preserveAspectRatio = slice", attr.preserveAspectRatio === "xMidYMid slice");
 
 cek("tidak ada NaN", !/NaN/.test(svg));
@@ -78,9 +78,9 @@ const netGaris = hitung(/<line x1=/g);
 console.log(`\n  grid: ${garisGrid} garis | jaringan: ${simpul} simpul, ${netGaris} penghubung`);
 console.log(`  denyut: ${denyut} simpul | halo: ${halo} busur | kilat: ${kilat} jalur`);
 
-// Vertikal: 1600/100 + 1 = 17, horizontal: 1000/100 + 1 = 11 → total 28.
-cek("grid tergambar (17 vertikal + 11 horizontal = 28 garis)", garisGrid === 28, String(garisGrid));
-cek("simpul jaringan ≥ 20", simpul >= 20, String(simpul));
+// Vertikal: 2000/100 + 1 = 21, horizontal: 1250/100 + 1 = 13 → total 34.
+cek("grid tergambar (21 vertikal + 13 horizontal = 34 garis)", garisGrid === 34, String(garisGrid));
+cek("simpul jaringan ≥ 40 (22 pasang, densitas tetap setelah kanvas diperbesar)", simpul >= 40, String(simpul));
 cek("ada penghubung antar simpul", netGaris > 10, String(netGaris));
 cek("simpul berdenyut ada", denyut >= 4, String(denyut));
 cek("3 busur halo", halo === 3, String(halo));
@@ -114,19 +114,19 @@ for (const u of new Set(urlRefs)) {
 }
 
 /* ==============================================================
-   SIMETRI CERMIN terhadap x = 800
+   SIMETRI CERMIN terhadap x = 1000
    Permintaan pemilik produk: latar harus "di tengah" & tidak berat sebelah,
    jadi simetri diperiksa otomatis di sini (bukan sekadar diklaim).
    ============================================================== */
-const TENGAH = 800;
-console.log("\n  -- uji simetri cermin (sumbu x = 800) --");
+const TENGAH = 1000;
+console.log("\n  -- uji simetri cermin (sumbu x = 1000) --");
 
-/* 1. Jaringan: tiap simpul WAJIB punya pasangan cermin (x' = 1600 − x) dengan
+/* 1. Jaringan: tiap simpul WAJIB punya pasangan cermin (x' = 2000 − x) dengan
       y, kelas, dan jeda denyut yang sama persis. */
 /* Simpul diam : class, cx, cy, r.
    Simpul denyut: class, cx, cy, r, fill-opacity, style(animation-delay) —
    fill-opacity "dipanggang" oleh bg.js karena simpul ini di LUAR grup ber-mask.
-   Keduanya harus diperiksa agar simetri seluruh 28 simpul benar-benar terbukti. */
+   Keduanya harus diperiksa agar simetri seluruh 44 simpul benar-benar terbukti. */
 const simpulRe = /<circle class="(ccbg-simpul[^"]*)" cx="(\d+)" cy="(\d+)" r="([\d.]+)"(?: fill-opacity="([\d.]+)")?(?: style="animation-delay:([\d.]+)s")?\/>/g;
 const daftarSimpul = [...svg.matchAll(simpulRe)].map((m) => ({
   kelas: m[1], x: Number(m[2]), y: Number(m[3]), r: Number(m[4]), tunda: m[5] || null,
@@ -134,7 +134,7 @@ const daftarSimpul = [...svg.matchAll(simpulRe)].map((m) => ({
 const kunciSimpul = (s) => `${s.x}|${s.y}|${s.kelas}|${s.r}|${s.tunda}`;
 const himpunanSimpul = new Set(daftarSimpul.map(kunciSimpul));
 const tanpaCermin = daftarSimpul.filter((s) =>
-  !himpunanSimpul.has(kunciSimpul({ ...s, x: 1600 - s.x })));
+  !himpunanSimpul.has(kunciSimpul({ ...s, x: 2000 - s.x })));
 cek(`semua ${daftarSimpul.length} simpul punya pasangan cermin`, tanpaCermin.length === 0,
   tanpaCermin.length ? `tanpa cermin: ${tanpaCermin.map((s) => s.x + "," + s.y).join(" ")}` : "");
 
@@ -144,15 +144,15 @@ const terlaluDekatTengah = daftarSimpul.filter((s) => Math.abs(s.x - TENGAH) < 4
 cek("tidak ada simpul menempel garis tengah (< 40px)", terlaluDekatTengah.length === 0,
   terlaluDekatTengah.map((s) => s.x).join(","));
 
-/* Sebaran vertikal harus seimbang: rata-rata y mendekati tengah kanvas (500). */
+/* Sebaran vertikal harus seimbang: rata-rata y mendekati tengah kanvas (625). */
 const rataY = daftarSimpul.reduce((a, s) => a + s.y, 0) / daftarSimpul.length;
-cek("sebaran simpul seimbang atas-bawah (rata2 y ≈ 500 ± 90)",
-  Math.abs(rataY - 500) <= 90, "rata2 y = " + rataY.toFixed(1));
+cek("sebaran simpul seimbang atas-bawah (rata2 y ≈ 625 ± 90)",
+  Math.abs(rataY - 625) <= 90, "rata2 y = " + rataY.toFixed(1));
 
-/* Kotak pembatas jaringan harus simetris: minX + maxX tepat 1600. */
+/* Kotak pembatas jaringan harus simetris: minX + maxX tepat 2000. */
 const xsSimpul = daftarSimpul.map((s) => s.x);
 const minX = Math.min(...xsSimpul), maxX = Math.max(...xsSimpul);
-cek("kotak jaringan simetris (minX + maxX = 1600)", minX + maxX === 1600,
+cek("kotak jaringan simetris (minX + maxX = 2000)", minX + maxX === 2000,
   `${minX} + ${maxX} = ${minX + maxX}`);
 
 /* 2. Penghubung jaringan: setiap garis harus punya pasangan cerminnya.
@@ -167,8 +167,8 @@ const setGarisNet = new Set(garisNet.map(kunciGaris));
 // simpul cermin, cerminan garis itu adalah dirinya sendiri dengan ujung
 // tertukar (a,b) → (b,a) — itu tetap dianggap simetris.
 const punyaCermin = ([a, b, c, d]) =>
-  setGarisNet.has(kunciGaris([1600 - a, b, 1600 - c, d])) ||
-  setGarisNet.has(kunciGaris([1600 - c, d, 1600 - a, b]));
+  setGarisNet.has(kunciGaris([2000 - a, b, 2000 - c, d])) ||
+  setGarisNet.has(kunciGaris([2000 - c, d, 2000 - a, b]));
 const garisTanpaCermin = garisNet.filter((g) => !punyaCermin(g));
 cek(`semua ${garisNet.length} penghubung jaringan punya pasangan cermin`,
   garisTanpaCermin.length === 0, garisTanpaCermin.length ? garisTanpaCermin.map(kunciGaris).join(" ") : "");
@@ -176,7 +176,7 @@ cek(`semua ${garisNet.length} penghubung jaringan punya pasangan cermin`,
 /* 3. Halo: semua busur harus berpusat tepat di garis tengah. */
 const haloRe = /<circle class="ccbg-halo-arc ccbg-halo-\d+" cx="(\d+)" cy="(\d+)" r="(\d+)"\/>/g;
 const daftarHalo = [...svg.matchAll(haloRe)].map((m) => ({ cx: Number(m[1]), cy: Number(m[2]), r: Number(m[3]) }));
-cek("semua busur halo berpusat di x = 800",
+cek("semua busur halo berpusat di x = 1000",
   daftarHalo.length > 0 && daftarHalo.every((h) => h.cx === TENGAH),
   daftarHalo.map((h) => h.cx).join(","));
 
@@ -187,7 +187,7 @@ if (kilatD.length === 2) {
   const kiri = titikJalur(kilatD[0]);
   const kanan = titikJalur(kilatD[1]);
   const cocok = kiri.length === kanan.length &&
-    kiri.every(([x, y], i) => Math.abs((1600 - x) - kanan[i][0]) < 0.001 && y === kanan[i][1]);
+    kiri.every(([x, y], i) => Math.abs((2000 - x) - kanan[i][0]) < 0.001 && y === kanan[i][1]);
   cek("kilat kanan = cerminan tepat kilat kiri", cocok,
     cocok ? `${kiri.length} titik per jalur` : "titik tidak cermin");
   // Pasangan kilat harus bersebelahan dengan sumbu? Tidak — kilat di margin tepi,
@@ -202,17 +202,17 @@ if (kilatD.length === 2) {
 
 /* 5. Grid: garisnya ber-atribut class, jadi diperiksa memakai pola ber-class.
       Semua garis vertikal (x tetap) harus simetris; garis horizontal otomatis
-      simetris karena bentangnya 0..1600 (tepat di tengah sumbu). */
+      simetris karena bentangnya 0..2000 (tepat di tengah sumbu). */
 const garisGridSemua = [...svg.matchAll(
   /<line class="ccbg-garis[^"]*" x1="(\d+)" y1="(\d+)" x2="(\d+)" y2="(\d+)"\/>/g)]
   .map((m) => [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]);
 const xsGrid = garisGridSemua.filter((g) => g[0] === g[2]).map((g) => g[0]);
 const setXGrid = new Set(xsGrid);
-cek("grid vertikal simetris (tiap x punya cermin 1600 − x)",
-  xsGrid.length > 0 && xsGrid.every((x) => setXGrid.has(1600 - x)), `${xsGrid.length} garis vertikal`);
+cek("grid vertikal simetris (tiap x punya cermin 2000 − x)",
+  xsGrid.length > 0 && xsGrid.every((x) => setXGrid.has(2000 - x)), `${xsGrid.length} garis vertikal`);
 const ysGrid = garisGridSemua.filter((g) => g[1] === g[3]).map((g) => g[1]);
-cek("grid horizontal membentang penuh 0→1600 (otomatis simetris)",
-  ysGrid.length > 0 && garisGridSemua.filter((g) => g[1] === g[3]).every((g) => g[0] === 0 && g[2] === 1600),
+cek("grid horizontal membentang penuh 0→2000 (otomatis simetris)",
+  ysGrid.length > 0 && garisGridSemua.filter((g) => g[1] === g[3]).every((g) => g[0] === 0 && g[2] === 2000),
   `${ysGrid.length} garis horizontal`);
 // Total grid harus cocok dengan jumlah yang dilaporkan di awal.
 cek("jumlah garis grid konsisten dengan laporan awal",
@@ -221,8 +221,8 @@ cek("jumlah garis grid konsisten dengan laporan awal",
 // Koordinat harus dalam (atau dekat) kanvas — hindari elemen "nyasar"
 const luar = [...svg.matchAll(/(?:x|cx|y|cy|x1|x2|y1|y2)="(-?\d+(?:\.\d+)?)"/g)]
   .map((m) => Number(m[1]))
-  .filter((n) => n < -200 || n > 1800);
-cek("tidak ada koordinat nyasar (< -200 atau > 1800)", luar.length === 0, luar.join(","));
+  .filter((n) => n < -250 || n > 2250);
+cek("tidak ada koordinat nyasar (< -250 atau > 2250)", luar.length === 0, luar.join(","));
 
 console.log("\n=== HASIL ===");
 console.log(err === 0 ? "bg.js VALID (0 masalah)" : `${err} masalah ditemukan`);

@@ -66,6 +66,50 @@ function breadcrumbTabAktif() {
   setBreadcrumbSegmen(aktif ? LABEL_ATAB_BC[aktif.dataset.atab] || "Kelola Key" : "Kelola Key");
 }
 
+/* ============ URL slug ala Thor-market (tiap aksi punya alamat) ============
+   Tab panel punya path slash sendiri: /admin/toko, /admin/aktivitas, dst.
+   Klik tab → pushState; refresh / tombol Kembali → tab yang sama muncul lagi. */
+const ATAB_DEFAULT = "kelola";
+const pathAtab = (nama) => (nama === ATAB_DEFAULT ? "/admin" : `/admin/${nama}`);
+function slugDariUrl() {
+  const m = location.pathname.match(/^\/admin\/([a-z0-9-]+)\/?$/i);
+  return m ? m[1].toLowerCase() : "";
+}
+/** Terapkan tab + (opsional) catat ke address bar. push=false untuk popstate/boot. */
+function navigasiAtab(nama, { push = true } = {}) {
+  document.querySelectorAll("[data-atab]").forEach((b) => b.classList.toggle("active", b.dataset.atab === nama));
+  document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === "atab-" + nama));
+  setBreadcrumbSegmen(LABEL_ATAB_BC[nama] || "Kelola Key");
+  if (push) {
+    try { history.pushState({ atab: nama }, "", pathAtab(nama)); } catch { /* abaikan */ }
+  }
+}
+window.addEventListener("popstate", () => {
+  const slug = slugDariUrl();
+  navigasiAtab(LABEL_ATAB_BC[slug] ? slug : ATAB_DEFAULT, { push: false });
+});
+
+/* Filter pesanan toko juga tercermin di URL: /admin/toko?status=PAID&q=THX- */
+function sinkronFilterOrdersUrl() {
+  try {
+    const p = new URLSearchParams();
+    if (ORDERS.status) p.set("status", ORDERS.status);
+    if (ORDERS.q) p.set("q", ORDERS.q);
+    const qs = p.toString();
+    history.replaceState(null, "", "/admin/toko" + (qs ? "?" + qs : ""));
+  } catch { /* abaikan */ }
+}
+function bacaFilterOrdersDariUrl() {
+  const p = new URLSearchParams(location.search);
+  ORDERS.status = (p.get("status") || "").toUpperCase();
+  ORDERS.q = p.get("q") || "";
+  const cari = $("orders-cari");
+  if (cari) cari.value = ORDERS.q;
+  document.querySelectorAll("[data-ostat]").forEach((c) =>
+    c.classList.toggle("active", (c.dataset.ostat || "") === ORDERS.status)
+  );
+}
+
 function showLogin() {
   loggedIn = false;
   if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; }
@@ -83,7 +127,11 @@ function showPanel() {
   $("login-section").classList.add("hidden");
   $("panel").classList.remove("hidden");
   $("btn-logout").classList.remove("hidden");
-  breadcrumbTabAktif();
+  // Pulihkan tab dari URL slug (/admin/toko → tab toko) tanpa push baru;
+  // filter pesanan (?status=&q=) ikut pulih bila slug-nya toko.
+  const slugAwal = slugDariUrl();
+  navigasiAtab(LABEL_ATAB_BC[slugAwal] ? slugAwal : ATAB_DEFAULT, { push: false });
+  if (slugAwal === "toko") bacaFilterOrdersDariUrl();
 }
 
 function toast(el, msg, ok = true) {
@@ -544,13 +592,8 @@ $("btn-logout").onclick = async (e) => {
 // ---- Tab panel admin ----
 document.querySelectorAll("[data-atab]").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll("[data-atab]").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
-    btn.classList.add("active");
-    const panel = $("atab-" + btn.dataset.atab);
-    if (panel) panel.classList.add("active");
-    // Breadcrumb ikut klik: Beranda / Panel Admin / <tab yang diklik>
-    setBreadcrumbSegmen(LABEL_ATAB_BC[btn.dataset.atab] || "Kelola Key");
+    // navigasiAtab: tampilkan tab + pushState URL slug (/admin/<tab>)
+    navigasiAtab(btn.dataset.atab);
   });
 });
 
@@ -1036,6 +1079,7 @@ document.querySelectorAll("[data-ostat]").forEach((chip) => {
     chip.classList.add("active");
     ORDERS.status = chip.dataset.ostat;
     ORDERS.offset = 0;
+    sinkronFilterOrdersUrl(); // URL ikut: /admin/toko?status=PAID
     loadOrders().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); });
   });
 });
@@ -1043,6 +1087,7 @@ document.querySelectorAll("[data-ostat]").forEach((chip) => {
 function jalankanCari() {
   ORDERS.q = $("orders-cari").value.trim();
   ORDERS.offset = 0;
+  sinkronFilterOrdersUrl(); // URL ikut: /admin/toko?q=THX-
   loadOrders().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); });
 }
 $("btn-orders-cari").addEventListener("click", jalankanCari);

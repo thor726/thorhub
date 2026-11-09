@@ -119,6 +119,39 @@ app.get("/beli", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "beli.html"));
 });
 
+// ---------------------------------------------------------------
+// URL slug profesional — SETIAP AKSI NAVIGASI punya alamat slash sendiri.
+// Semua slug melayani HALAMAN yang sama (panel tetap satu file HTML); yang
+// berbeda hanya path URL-nya, sehingga tiap tab/tahap bisa di-bookmark,
+// dibagikan, dan tombol Kembali browser berperilaku wajar:
+//   /portal/topup  /portal/pesanan  /portal/pemakaian  /portal/model  /portal/log
+//   /admin/aktivitas  /admin/model  /admin/toko
+//   /docs/mulai  /docs/sdk  /docs/aplikasi  /docs/referensi
+//   /beli/topup  /beli/pembayaran?order=…  /beli/selesai?order=…  (checkout = /beli)
+// Slug tidak dikenal → halaman 404 (bukan respons JSON API).
+// Catatan urutan: alias ini WAJIB terpasang sebelum router API di bawah,
+// dan slug di `api:` adalah segmen pertama endpoint REST asli yang tidak
+// boleh ditimpa halaman (mis. GET /admin/keys → JSON, bukan admin.html).
+// ---------------------------------------------------------------
+const HALAMAN_SLUG = {
+  portal: { berkas: "portal.html", slug: new Set(["topup", "pesanan", "pemakaian", "model", "log"]), api: new Set(["member", "admin"]) },
+  admin: { berkas: "admin.html", slug: new Set(["aktivitas", "model", "toko"]), api: new Set(["keys", "usage"]) },
+  docs: { berkas: "docs.html", slug: new Set(["mulai", "sdk", "aplikasi", "referensi"]), api: new Set() },
+  beli: { berkas: "beli.html", slug: new Set(["topup", "pembayaran", "selesai"]), api: new Set() },
+};
+for (const [awalan, hal] of Object.entries(HALAMAN_SLUG)) {
+  app.get(`/${awalan}/:slug`, (req, res, next) => {
+    const slug = String(req.params.slug || "").toLowerCase();
+    if (hal.slug.has(slug)) {
+      return res.sendFile(path.join(PUBLIC_DIR, hal.berkas));
+    }
+    if (hal.api.has(slug)) return next(); // milik router API (dipasang di bawah)
+    res.status(404).sendFile(path.join(PUBLIC_DIR, "404.html"), (err) => {
+      if (err) res.type("text/plain").send("404 - Halaman tidak ditemukan.");
+    });
+  });
+}
+
 // Log ringkas setiap request
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);

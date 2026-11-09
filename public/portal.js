@@ -77,6 +77,53 @@ function breadcrumbTabAktif() {
   setBreadcrumbSegmen(aktif ? LABEL_TAB_BC[aktif.dataset.tab] || "Dashboard" : "Dashboard");
 }
 
+/* ============ URL slug ala Thor-market (tiap aksi punya alamat) ============
+   Tab panel punya path slash sendiri: /portal/topup, /portal/pesanan, dst.
+   Klik tab → pushState; refresh / tombol Kembali → tab yang sama muncul lagi;
+   URL bisa di-bookmark & dibagikan — terasa seperti halaman sungguhan. */
+const TAB_PORTAL_DEFAULT = "integrasi";
+const pathTab = (nama) => (nama === TAB_PORTAL_DEFAULT ? "/portal" : `/portal/${nama}`);
+function slugDariUrl() {
+  const m = location.pathname.match(/^\/portal\/([a-z0-9-]+)\/?$/i);
+  return m ? m[1].toLowerCase() : "";
+}
+/** Terapkan tab + (opsional) catat ke address bar. push=false untuk popstate/boot. */
+function navigasiTab(nama, { push = true } = {}) {
+  aktifkanTab(nama);
+  if (!push) return;
+  try { history.pushState({ tab: nama }, "", pathTab(nama)); } catch { /* abaikan */ }
+}
+window.addEventListener("popstate", () => {
+  const slug = slugDariUrl();
+  aktifkanTab(LABEL_TAB_BC[slug] ? slug : TAB_PORTAL_DEFAULT);
+  if (slug === "pesanan") {
+    bacaFilterPesananDariUrl();
+    muatPesanan();
+  }
+});
+
+/* Filter pesanan (pill status + pencarian) juga tercermin di URL:
+   /portal/pesanan?status=PAID&q=THX- — profesional & bisa dibagikan. */
+function sinkronFilterPesananUrl() {
+  try {
+    const p = new URLSearchParams();
+    if (pesananFilter.status) p.set("status", pesananFilter.status);
+    if (pesananFilter.q) p.set("q", pesananFilter.q);
+    const qs = p.toString();
+    history.replaceState(null, "", "/portal/pesanan" + (qs ? "?" + qs : ""));
+  } catch { /* abaikan */ }
+}
+function bacaFilterPesananDariUrl() {
+  const p = new URLSearchParams(location.search);
+  pesananFilter.status = (p.get("status") || "").toUpperCase();
+  pesananFilter.q = p.get("q") || "";
+  const cari = $("order-cari");
+  if (cari) cari.value = pesananFilter.q;
+  document.querySelectorAll("#order-pills .pill").forEach((pp) =>
+    pp.classList.toggle("active", (pp.dataset.status || "") === pesananFilter.status)
+  );
+}
+
 /** Muat data akun + pemakaian, lalu render seluruh dashboard. */
 async function boot() {
   let d;
@@ -94,6 +141,10 @@ async function boot() {
   $("panel").classList.remove("hidden");
   $("btn-logout").classList.remove("hidden");
   $("btn-refresh").classList.remove("hidden");
+  // Pulihkan tab dari URL slug (/portal/pesanan → tab pesanan) tanpa push baru.
+  const slugAwal = slugDariUrl();
+  aktifkanTab(LABEL_TAB_BC[slugAwal] ? slugAwal : TAB_PORTAL_DEFAULT);
+  if (slugAwal === "pesanan") bacaFilterPesananDariUrl();
   breadcrumbTabAktif();
 
   // Jadwalkan auto-logout saat sesi 2 jam habis (expires_at dari server).
@@ -483,12 +534,8 @@ document.querySelectorAll("[data-copy]").forEach((btn) => {
 // ---------------- Interaksi ----------------
 document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
-    btn.classList.add("active");
-    $("tab-" + btn.dataset.tab).classList.add("active");
-    // Breadcrumb ikut klik: Beranda / Portal Member / <tab yang diklik>
-    setBreadcrumbSegmen(LABEL_TAB_BC[btn.dataset.tab] || "Dashboard");
+    // navigasiTab: tampilkan tab + pushState URL slug (/portal/<tab>)
+    navigasiTab(btn.dataset.tab);
     // Buka tab Pesanan Saya → daftar selalu segar saat dilihat
     if (btn.dataset.tab === "pesanan") muatPesanan();
   });
@@ -579,9 +626,10 @@ function aktifkanTab(nama) {
   setBreadcrumbSegmen(LABEL_TAB_BC[nama] || "Dashboard");
 }
 
-/** Buka tab Top Up dari tombol mana pun (kartu kuota / banner peringatan). */
+/** Buka tab Top Up dari tombol mana pun (kartu kuota / banner peringatan).
+ *  Lewat navigasiTab agar URL ikut berubah ke /portal/topup. */
 function bukaTopup() {
-  aktifkanTab("topup");
+  navigasiTab("topup");
   muatPaketTopup();
   muatRiwayatTopup();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -821,7 +869,7 @@ function tampilTopupSelesai(o) {
       <div class="kv-row"><span>Struk</span><b>dikirim ke email/WA bila diisi</b></div>
     </div>
     <div class="row-actions">
-      <a class="btn primary" href="#" onclick="aktifkanTab('integrasi');return false;">Lihat Kredensial</a>
+      <a class="btn primary" href="#" onclick="navigasiTab('integrasi');return false;">Lihat Kredensial</a>
       <button class="btn" id="btn-topup-lagi" type="button">Top Up Lagi</button>
     </div>`;
   const lagi = $("btn-topup-lagi");
@@ -1056,12 +1104,14 @@ $("order-pills").addEventListener("click", (e) => {
   if (!pill) return;
   document.querySelectorAll("#order-pills .pill").forEach((p) => p.classList.toggle("active", p === pill));
   pesananFilter.status = pill.dataset.status || "";
+  sinkronFilterPesananUrl(); // URL ikut: /portal/pesanan?status=PAID
   muatPesanan();
 });
 $("order-cari").addEventListener("input", () => {
   clearTimeout(cariTimer);
   cariTimer = setTimeout(() => {
     pesananFilter.q = $("order-cari").value.trim();
+    sinkronFilterPesananUrl(); // URL ikut: /portal/pesanan?q=THX-
     muatPesanan();
   }, 300);
 });

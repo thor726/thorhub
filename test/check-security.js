@@ -84,8 +84,18 @@ const http = async (urlPath, opts = {}) => {
   console.log("\n5) Header keamanan terset (harus ada)");
   {
     const r = await http("/portal");
-    const perlu = ["x-content-type-options", "x-frame-options", "content-security-policy", "referrer-policy"];
-    for (const h of perlu) cek(`Header ${h}`, !!r.headers.get(h), "(tidak ada)");
+    // Mode ditentukan dari RESPONS (bukan env proses uji): server dengan
+    // SANDBOX_PREVIEW=1 mengganti X-Frame-Options dengan frame-ancestors di CSP
+    // agar halaman bisa disematkan di iframe panel preview.
+    cek("Header x-content-type-options", !!r.headers.get("x-content-type-options"), "(tidak ada)");
+    cek("Header referrer-policy", !!r.headers.get("referrer-policy"), "(tidak ada)");
+    const csp = r.headers.get("content-security-policy") || "";
+    cek("Header content-security-policy", !!csp, "(tidak ada)");
+    if (csp.includes("frame-ancestors")) {
+      cek("Header frame-ancestors (mode preview)", csp.includes("frame-ancestors *"), "(frame-ancestors tanpa *)");
+    } else {
+      cek("Header x-frame-options (mode produksi)", !!r.headers.get("x-frame-options"), "(tidak ada)");
+    }
   }
 
   console.log("\n6) Login sukses mereset penghitung brute-force");

@@ -58,17 +58,42 @@ function amanOffset(ms) {
   return Math.abs(ms) < 10 * 60_000 ? ms : 0;
 }
 
-/* ================= URL: kode pesanan di address bar ================= */
-function sinkronUrl(kode) {
+/* ================= URL: kode pesanan + tahap di address bar =================
+   URL punya slug tahap ala marketplace: /beli/pembayaran?order=THX-… dan
+   /beli/selesai?order=THX-… — tiap langkah punya alamat sendiri (profesional,
+   bisa di-bookmark), dan tetap menyimpan kode pesanan agar QR kebal restart. */
+function sinkronUrl(kode, tahap = "pembayaran") {
   try {
-    history.replaceState(null, "", "/beli?order=" + encodeURIComponent(kode));
+    history.pushState(null, "", `/beli/${tahap}?order=` + encodeURIComponent(kode));
   } catch { /* abaikan */ }
 }
 function bersihkanUrl() {
   try {
-    if (new URLSearchParams(location.search).has("order")) history.replaceState(null, "", "/beli");
+    if (location.pathname !== "/beli" || new URLSearchParams(location.search).has("order")) {
+      history.replaceState(null, "", "/beli");
+    }
   } catch { /* abaikan */ }
 }
+
+/* Tombol Kembali browser dari tahap pembayaran/selesai → kembali ke form
+   checkout dengan wajar (polling dihentikan, kartu "Lanjutkan" dimunculkan). */
+window.addEventListener("popstate", () => {
+  const kode = (new URLSearchParams(location.search).get("order") || "").trim();
+  const diTahap = /^\/beli\/(pembayaran|selesai)\/?$/.test(location.pathname);
+  if (kode && diTahap) {
+    pulihkanDariUrl(); // maju lagi ke pembayaran/selesai via URL (tanpa push)
+    return;
+  }
+  hentikanPolling();
+  if (countdownTimer) clearInterval(countdownTimer);
+  pesanan = null;
+  setStepper(1);
+  $("step-bayar").classList.add("hidden");
+  $("step-selesai").classList.add("hidden");
+  $("step-form").classList.remove("hidden");
+  bersihkanUrl();
+  tawarkanOrderLama();
+});
 
 /* ================= Muat katalog paket ================= */
 async function muatPaket() {
@@ -178,7 +203,7 @@ $("form-beli").addEventListener("submit", async (e) => {
     };
     if (pay.server_now) offsetServer = amanOffset(pay.server_now - Date.now());
     simpanOrderLokal();
-    sinkronUrl(pesanan.kode);
+    sinkronUrl(pesanan.kode, "pembayaran"); // URL: /beli/pembayaran?order=…
     tampilPembayaran(pay.qr_image);
   } catch (err) {
     pesanForm(err.message, false);
@@ -316,8 +341,15 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ================= Tampilan selesai ================= */
-function tampilSelesai(o) {
+function tampilSelesai(o, { push = true } = {}) {
   setStepper(3);
+  // Catat alamat tahap terakhir — push saat alur normal, replace saat pemulihan
+  // dari URL (agar tidak menumpuk entri history yang identik).
+  try {
+    const url = `/beli/selesai?order=` + encodeURIComponent(o.order_code);
+    if (push) history.pushState(null, "", url);
+    else if (location.pathname !== "/beli/selesai") history.replaceState(null, "", url);
+  } catch { /* abaikan */ }
   $("step-bayar").classList.add("hidden");
   $("step-selesai").classList.remove("hidden");
 
@@ -466,7 +498,7 @@ async function pulihkanDariUrl() {
        pesan umum + arahan cek email/WA). URL dibiarkan agar refresh tetap ada. */
     if (o.status === "COMPLETED") {
       if (!o.limited) {
-        tampilSelesai(o);
+        tampilSelesai(o, { push: false }); // sudah di URL selesai — tanpa push baru
       } else {
         setStepper(3);
         $("step-form").classList.add("hidden");
@@ -593,7 +625,8 @@ async function tawarkanOrderLama() {
 /* ================= Parameter URL (?mode=&key=&paket=) ================= */
 function bacaParameter() {
   const p = new URLSearchParams(location.search);
-  if (p.get("mode") === "topup") {
+  // Slug /beli/topup = checkout dengan mode top-up terpilih (alamat sendiri).
+  if (location.pathname === "/beli/topup" || p.get("mode") === "topup") {
     setMode("topup");
     const kunci = (p.get("key") || "").trim();
     if (kunci) $("f-apikey").value = kunci;
