@@ -657,6 +657,66 @@ const LABEL_STATUS = { PENDING: "Menunggu Bayar", PAID: "Dibayar", COMPLETED: "S
 const TAG_STATUS = { PENDING: "warn", PAID: "info", COMPLETED: "ok", CANCELLED: "plain" };
 const ORDERS = { status: "", q: "", offset: 0, limit: 25, total: 0 };
 
+/** Konversi waktu SQLite UTC → "3 Des, 14.05" (WIB) — sama dengan portal member. */
+function formatWaktu(sql) {
+  if (!sql) return "";
+  const ms = Date.parse(String(sql).replace(" ", "T") + "Z");
+  if (!Number.isFinite(ms)) return String(sql);
+  return new Date(ms).toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  });
+}
+
+/**
+ * Stepper 4 langkah ala marketplace (logika identik dengan langkahPelacakan
+ * di server): state done | current | pending | failed.
+ */
+function langkahPelacakan(o) {
+  const batal = o.status === "CANCELLED";
+  const selesai = o.status === "COMPLETED";
+  const dibayar = !!o.paid_at;
+  return [
+    { key: "dibuat", label: "Pesanan Dibuat", at: o.created_at, state: "done" },
+    {
+      key: "bayar",
+      label: dibayar ? "Pembayaran Diterima" : "Pembayaran",
+      at: o.paid_at || null,
+      state: dibayar ? "done" : batal ? "failed" : "current",
+    },
+    {
+      key: "proses",
+      label: o.mode === "topup" ? "Kuota Ditambahkan" : "Key Diterbitkan",
+      at: o.completed_at || null,
+      state: selesai ? "done" : dibayar ? "current" : batal ? "failed" : "pending",
+    },
+    {
+      key: "selesai",
+      label: batal ? "Dibatalkan" : "Selesai",
+      at: selesai ? o.completed_at : null,
+      state: selesai ? "done" : batal ? "failed" : "pending",
+    },
+  ];
+}
+
+/** Render stepper 4 langkah (markup sama dengan portal member). */
+function renderStepper(steps) {
+  return `<div class="trk-steps">${steps
+    .map((s, i) => {
+      const ikon = s.state === "done" ? "✓" : s.state === "failed" ? "✕" : String(i + 1);
+      const waktu = s.at ? formatWaktu(s.at) : "";
+      return `<div class="trk-step ${s.state}">
+        <span class="trk-dot">${ikon}</span>
+        <b>${esc(s.label)}</b>
+        <small>${waktu ? esc(waktu) : "&nbsp;"}</small>
+      </div>`;
+    })
+    .join("")}</div>`;
+}
+
 const tagStatus = (s) =>
   `<span class="tag ${TAG_STATUS[s] || "plain"}">${LABEL_STATUS[s] || esc(s)}</span>`;
 
@@ -690,14 +750,14 @@ async function loadOrders() {
     tb.innerHTML = rows
       .map((o) => {
         const lewat = o.expires_at && o.expires_at < Date.now();
-        return `<tr>
+        return `<tr class="row-lacak" data-code="${esc(o.order_code)}" tabindex="0" role="button" aria-label="Buka detail pesanan ${esc(o.order_code)}" title="Klik untuk melacak pesanan ini">
           <td class="mono"><b>${esc(o.order_code)}</b></td>
           <td>${esc(o.user_name)}<div class="muted" style="font-size:11.5px">${esc(o.email || "")}${o.whatsapp ? " · " + esc(o.whatsapp) : ""}</div></td>
           <td>${kek(o.quota_tokens)} token</td>
           <td class="num on">${rupiahIDR(o.amount_to_pay)}<div class="muted" style="font-size:11.5px">unik +${o.unique_code}${lewat && o.status === "PENDING" ? " · <span style='color:var(--red)'>tagihan lewat</span>" : ""}</div></td>
           <td>${o.mode === "key_baru" ? "Key baru" : "Top-up"}</td>
           <td>${tagStatus(o.status)}</td>
-          <td class="mono muted">${esc(o.created_at)}</td>
+          <td class="mono muted">${esc(formatWaktu(o.created_at))}</td>
           <td style="white-space:nowrap">
             <button class="btn small" data-ord="${esc(o.order_code)}" data-act="detail">Detail</button>
             ${o.status === "PENDING" || o.status === "CANCELLED" ? `<button class="btn small primary" data-ord="${esc(o.order_code)}" data-act="konfirmasi">Lunas?</button>` : ""}
@@ -725,7 +785,7 @@ async function loadOrders() {
     te.innerHTML = ev
       .map(
         (e) => `<tr>
-          <td class="mono muted">${esc(e.created_at)}</td>
+          <td class="mono muted">${esc(formatWaktu(e.created_at))}</td>
           <td class="num">${e.amount ? rupiahIDR(e.amount) : "—"}</td>
           <td class="mono">${e.order_code ? esc(e.order_code) : "—"}</td>
           <td>${e.matched ? '<span class="tag ok">ya</span>' : '<span class="tag off">tidak</span>'}</td>
@@ -760,7 +820,7 @@ function renderTimeline(items) {
         <div class="tl-head">
           <b>${TL_LABEL[e.type] || esc(e.type)}</b>
           <span class="tag plain">${esc(e.actor)}</span>
-          <span class="mono muted" style="font-size:11px;margin-left:auto">${esc(e.created_at)}</span>
+          <span class="mono muted" style="font-size:11px;margin-left:auto">${esc(formatWaktu(e.created_at))}</span>
         </div>
         <div class="tl-detail">${esc(e.detail)}</div>
       </div>`
@@ -785,20 +845,19 @@ async function bukaDetailOrder(kode) {
         <div class="kv-row"><span>Paket</span><b>${num(o.quota_tokens)} token · ${o.mode === "key_baru" ? "Key baru" : "Top-up"}</b></div>
         <div class="kv-row"><span>Tagihan</span><b>${rupiahIDR(o.base_amount)} + unik ${o.unique_code} = <span class="ok">${rupiahIDR(o.amount_to_pay)}</span></b></div>
         <div class="kv-row"><span>Metode</span><b>${esc(o.payment_method)}</b></div>
-        <div class="kv-row"><span>Status</span><b>${tagStatus(o.status)}</b></div>
         ${o.mode === "key_baru" && o.api_key_issued ? `<div class="kv-row"><span>Key Terbit</span><b class="ok" style="word-break:break-all">${esc(o.api_key_issued)}</b></div>` : ""}
         ${o.mode === "topup" ? `<div class="kv-row"><span>Key Target</span><b style="word-break:break-all">${esc(o.target_api_key)}</b></div>` : ""}
-        <div class="kv-row"><span>Dibuat</span><b>${esc(o.created_at)}</b></div>
-        ${o.paid_at ? `<div class="kv-row"><span>Dibayar</span><b>${esc(o.paid_at)}</b></div>` : ""}
-        ${o.completed_at ? `<div class="kv-row"><span>Selesai</span><b>${esc(o.completed_at)}</b></div>` : ""}
-        <div class="kv-row"><span>Tagihan Berlaku</span><b>${new Date(o.expires_at).toLocaleString("id-ID")}${lewat && o.status === "PENDING" ? ' <span class="tag off">lewat</span>' : ""}</b></div>
+        <div class="kv-row"><span>Dibuat</span><b>${esc(formatWaktu(o.created_at))}</b></div>
+        ${o.paid_at ? `<div class="kv-row"><span>Dibayar</span><b>${esc(formatWaktu(o.paid_at))}</b></div>` : ""}
+        ${o.completed_at ? `<div class="kv-row"><span>Selesai</span><b>${esc(formatWaktu(o.completed_at))}</b></div>` : ""}
+        <div class="kv-row"><span>Tagihan Berlaku</span><b>${esc(formatWaktu(new Date(o.expires_at).toISOString().slice(0, 19).replace("T", " ")))}${lewat && o.status === "PENDING" ? ' <span class="tag off">lewat</span>' : ""}</b></div>
         ${o.note ? `<div class="kv-row"><span>Catatan</span><b>${esc(o.note)}</b></div>` : ""}
       </div>`;
 
     const logDana = (d.events || [])
       .map(
         (e) => `<tr>
-          <td class="mono muted" style="font-size:11.5px">${esc(e.created_at)}</td>
+          <td class="mono muted" style="font-size:11.5px">${esc(formatWaktu(e.created_at))}</td>
           <td class="num">${e.amount ? rupiahIDR(e.amount) : "—"}</td>
           <td>${e.matched ? '<span class="tag ok">ya</span>' : '<span class="tag off">tidak</span>'}</td>
           <td class="muted" style="font-size:12px;word-break:break-word">${esc(e.note || e.raw_text || "")}</td>
@@ -807,10 +866,17 @@ async function bukaDetailOrder(kode) {
       .join("");
 
     $("modal-body").innerHTML = `
+      <div class="trk-status">
+        <span class="tag ${TAG_STATUS[o.status] || "plain"}" style="font-size:12px">${esc(LABEL_STATUS[o.status] || o.status)}</span>
+        ${lewat && o.status === "PENDING" ? '<span class="tag off">tagihan kedaluwarsa</span>' : ""}
+        ${o.note && o.status === "CANCELLED" ? `<span class="muted" style="font-size:12.5px">${esc(o.note)}</span>` : ""}
+      </div>
+      ${renderStepper(langkahPelacakan(o))}
+      <h3 class="trk-sub">Info Pesanan</h3>
       ${info}
-      <h3 style="margin:18px 0 4px;font-size:14px">Linimasa Pesanan</h3>
+      <h3 class="trk-sub">Linimasa Pesanan</h3>
       ${renderTimeline(d.timeline)}
-      <h3 style="margin:18px 0 4px;font-size:14px">Notifikasi DANA Terkait</h3>
+      <h3 class="trk-sub">Notifikasi DANA Terkait</h3>
       <div class="table-scroll">
         <table class="models-table">
           <thead><tr><th>Waktu</th><th class="num">Nominal</th><th>Cocok</th><th>Catatan</th></tr></thead>
@@ -929,6 +995,21 @@ $("tbody-orders").addEventListener("click", async (e) => {
   } catch (err) {
     if (err.message !== "unauthorized") notif(err.message, false);
   }
+});
+
+// Klik baris (di luar tombol aksi) / Enter pada baris → buka pelacakan lengkap,
+// sama seperti kartu pesanan di portal member.
+$("tbody-orders").addEventListener("click", async (e) => {
+  if (e.target.closest("button[data-act]")) return; // tombol punya handler sendiri
+  const tr = e.target.closest("tr.row-lacak[data-code]");
+  if (tr) await bukaDetailOrder(tr.dataset.code);
+});
+$("tbody-orders").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const tr = e.target.closest("tr.row-lacak[data-code]");
+  if (!tr) return;
+  e.preventDefault();
+  await bukaDetailOrder(tr.dataset.code);
 });
 
 /* ---------- Filter, pencarian & paginasi ---------- */

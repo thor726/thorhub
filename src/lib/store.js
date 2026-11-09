@@ -152,6 +152,13 @@ function prosesPesananLunas(order, opts = {}) {
       const terbit = terbitkanKeyUntukPesanan(order);
       db.prepare(`UPDATE orders SET api_key_issued = ? WHERE id = ?`).run(terbit.apiKey, order.id);
       order.api_key_issued = terbit.apiKey;
+      // Linkage dua arah: pesanan tanpa owner (dibeli tamu / browser lain)
+      // dimiliki oleh key yang diterbitkan — pelacakan tetap tampil ketika
+      // pembeli login dengan key barunya.
+      if (!order.owner_api_key) {
+        db.prepare(`UPDATE orders SET owner_api_key = ? WHERE id = ?`).run(terbit.apiKey, order.id);
+        order.owner_api_key = terbit.apiKey;
+      }
       masaAktifBaru = terbit.expiresAt;
       catatan = "key baru diterbitkan";
       selesai = true;

@@ -69,10 +69,18 @@ async function main() {
   const kodePending = "THX-TESTP" + crypto.randomBytes(3).toString("hex").toUpperCase();
   const kodeSelesai = "THX-TESTS" + crypto.randomBytes(3).toString("hex").toUpperCase();
   const kodeOrangLain = "THX-TESTX" + crypto.randomBytes(3).toString("hex").toUpperCase();
+  // Untuk uji linkage keluarga key (bagian [9]):
+  const keyRoot = "sk-thor-" + crypto.randomBytes(24).toString("hex");
+  const keyAnak = "sk-thor-" + crypto.randomBytes(24).toString("hex");
+  const kodeAnak = "THX-TESTK" + crypto.randomBytes(3).toString("hex").toUpperCase();
+  const kodeRootTopup = "THX-TESTU" + crypto.randomBytes(3).toString("hex").toUpperCase();
 
   const info1 = masuk.run(kodePending, "tok-uji", "topup", "20m", 20_000_000, memberKey.user_name, "", "", memberKey.api_key, "", 16_000, 123, 16_123, "QRIS DANA", "PENDING", expBsk);
   const info2 = masuk.run(kodeSelesai, "tok-uji", "key_baru", "50m", 50_000_000, memberKey.user_name, memberKey.user_name + "@uji.test", "", "", memberKey.api_key, 36_000, 456, 36_456, "QRIS DANA", "COMPLETED", expBsk);
   const info3 = masuk.run(kodeOrangLain, "tok-uji", "topup", "10m", 10_000_000, "pembeli-lain", "", "", keyLain, "", 8_000, 789, 8_789, "QRIS DANA", "PENDING", expBsk);
+  // Untuk bagian [9] (diisi di dalam try, dipakai juga oleh finally):
+  let infoAnak = null;
+  let infoRootTopup = null;
 
   const pesananLib = require("../src/lib/pesanan");
   // Pesanan COMPLETED selalu punya paid_at/completed_at (diisi prosesPesananLunas).
@@ -169,12 +177,62 @@ async function main() {
     const css = await fetch(BASE + "/style.css").then((r) => r.text());
     cek("CSS stepper & order-card ada", css.includes(".trk-step") && css.includes(".order-card"));
 
+    // ---------- Regresi: linkage keluarga key (pesanan key baru) ----------
+    // Simulasi keluhan "baru beli key, lacak pesanan belum ada":
+    // member login dengan key A membeli KEY BARU → pesanan di-stamp
+    // owner_api_key = A → harus langsung terlihat di pelacakan A (PENDING),
+    // dan setelah lunas juga terlihat dari key B penerbitnya (keluarga).
+    console.log("[9] Linkage keluarga key (order key_baru dari sesi member)");
+    db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit) VALUES (?, ?, ?)").run(keyRoot, "uji-keluarga", 1000);
+    infoAnak = masuk.run(kodeAnak, "tok-uji", "key_baru", "10m", 10_000_000, "uji-keluarga", "uji-keluarga@uji.test", "", "", "", 8_000, 111, 8_111, "QRIS DANA", "PENDING", expBsk);
+    infoRootTopup = masuk.run(kodeRootTopup, "tok-uji", "topup", "10m", 10_000_000, "uji-keluarga", "uji-keluarga@uji.test", "", keyRoot, "", 8_000, 222, 8_222, "QRIS DANA", "PENDING", expBsk);
+    // Stamp owner (ala POST /store/orders saat sesi portal aktif):
+    db.prepare("UPDATE orders SET owner_api_key = ? WHERE order_code IN (?, ?)").run(keyRoot, kodeAnak, kodeRootTopup);
+    pesananLib.catatEvent(infoAnak.lastInsertRowid, "dibuat", "pembeli", "Pesanan uji keluarga dibuat.");
+
+    // Login sebagai KEY ROOT — pesanan PENDING-nya sendiri harus terlihat.
+    const loginRoot = await panggil("POST", "/portal/member/login", { api_key: keyRoot });
+    cek("login key root 200", loginRoot.status === 200);
+    const kopiAwal = KOPI;
+    KOPI = (loginRoot.setCookie || "").split(";")[0];
+    const daftarRoot = await panggil("GET", "/portal/member/orders");
+    cek("PENDING key_baru terlihat dari key root (owner linkage)", (daftarRoot.json.data.orders || []).some((o) => o.order_code === kodeAnak));
+    cek("topup key root terlihat dari key root", (daftarRoot.json.data.orders || []).some((o) => o.order_code === kodeRootTopup));
+
+    // Lunaskan order key_baru → terbitkan key anak (ala prosesPesananLunas).
+    db.prepare("UPDATE orders SET status = 'COMPLETED', paid_at = datetime('now','localtime'), completed_at = datetime('now','localtime'), api_key_issued = ? WHERE order_code = ?").run(keyAnak, kodeAnak);
+    db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit) VALUES (?, ?, ?)").run(keyAnak, "uji-keluarga", 10_000_000);
+
+    // Login dengan KEY ANAK → keluarga key: melihat pesanan penerbitnya +
+    // pesanan keluarga (owner key root ikut lewat lineage/identitas).
+    const loginAnak = await panggil("POST", "/portal/member/login", { api_key: keyAnak });
+    cek("login dengan key anak 200", loginAnak.status === 200);
+    KOPI = (loginAnak.setCookie || "").split(";")[0];
+    const daftarAnak = await panggil("GET", "/portal/member/orders");
+    cek("key anak melihat pesanan penerbitnya", (daftarAnak.json.data.orders || []).some((o) => o.order_code === kodeAnak));
+    cek("key anak melihat pesanan key root (keluarga)", (daftarAnak.json.data.orders || []).some((o) => o.order_code === kodeRootTopup));
+    const detAnak = await panggil("GET", "/portal/member/orders/" + kodeAnak);
+    cek("detail dari key anak 200", detAnak.status === 200);
+
+    // Kembali ke KEY ROOT — tetap melihat pesanan yang sudah lunas.
+    const loginRoot2 = await panggil("POST", "/portal/member/login", { api_key: keyRoot });
+    KOPI = (loginRoot2.setCookie || "").split(";")[0];
+    const daftarRoot2 = await panggil("GET", "/portal/member/orders");
+    cek("key root tetap melihat setelah lunas", (daftarRoot2.json.data.orders || []).some((o) => o.order_code === kodeAnak));
+    KOPI = kopiAwal;
+
     console.log(`\n=== HASIL: ${lolos} lolos, ${gagal} gagal ===\n`);
   } finally {
     // ---------- Bersih-bersih data uji ----------
     const ids = [info1.lastInsertRowid, info2.lastInsertRowid, info3.lastInsertRowid];
+    if (infoAnak) ids.push(infoAnak.lastInsertRowid);
+    if (infoRootTopup) ids.push(infoRootTopup.lastInsertRowid);
     for (const id of ids) db.prepare("DELETE FROM order_events WHERE order_id = ?").run(id);
-    for (const kode of [kodePending, kodeSelesai, kodeOrangLain]) db.prepare("DELETE FROM orders WHERE order_code = ?").run(kode);
+    for (const kode of [kodePending, kodeSelesai, kodeOrangLain, kodeAnak, kodeRootTopup]) db.prepare("DELETE FROM orders WHERE order_code = ?").run(kode);
+    for (const k of [keyRoot, keyAnak]) {
+      db.prepare("DELETE FROM sessions WHERE api_key = ?").run(k);
+      db.prepare("DELETE FROM api_keys WHERE api_key = ?").run(k);
+    }
   }
 
   process.exit(gagal === 0 ? 0 : 1);

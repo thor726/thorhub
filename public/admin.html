@@ -345,14 +345,16 @@
           <!-- Statistik toko -->
           <div class="grid stagger" id="toko-stats"></div>
 
-          <!-- Filter & pencarian -->
-          <div class="row-actions" style="margin:14px 0 10px;flex-wrap:wrap;gap:8px">
-            <button class="chip active" data-ostat="" type="button">Semua</button>
-            <button class="chip" data-ostat="PENDING" type="button">Menunggu Bayar</button>
-            <button class="chip" data-ostat="PAID" type="button">Dibayar</button>
-            <button class="chip" data-ostat="COMPLETED" type="button">Selesai</button>
-            <button class="chip" data-ostat="CANCELLED" type="button">Batal</button>
-            <input id="orders-cari" placeholder="Cari kode / nama / email / WA / key…" style="max-width:260px;margin-left:auto" />
+          <!-- Filter & pencarian (pill ala portal member) -->
+          <div class="order-filter" style="margin:14px 0 10px">
+            <div class="pill-group" role="group" aria-label="Filter status pesanan">
+              <button class="pill active" data-ostat="" type="button">Semua</button>
+              <button class="pill" data-ostat="PENDING" type="button">Menunggu Bayar</button>
+              <button class="pill" data-ostat="PAID" type="button">Dibayar</button>
+              <button class="pill" data-ostat="COMPLETED" type="button">Selesai</button>
+              <button class="pill" data-ostat="CANCELLED" type="button">Batal</button>
+            </div>
+            <input id="orders-cari" type="search" placeholder="Cari kode / nama / email / WA / key…" autocomplete="off" />
             <button class="btn small" id="btn-orders-cari" type="button">Cari</button>
             <button class="btn small" id="btn-orders-refresh" type="button" title="Muat ulang">
               <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>

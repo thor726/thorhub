@@ -30,6 +30,7 @@ const notify = require("../lib/notify");
 const ratelimit = require("../lib/ratelimit");
 const pesanan = require("../lib/pesanan");
 const masaAktif = require("../lib/masa-aktif");
+const session = require("../lib/session");
 
 const { QRIS_DANA_METHOD, ORDER_EXPIRY_HOURS } = payment;
 
@@ -151,6 +152,20 @@ router.post("/orders", async (req, res) => {
   let amountToPay = paket.price + uniqueCode;
 
   // 5. Simpan pesanan PENDING
+  // Linkage akun member (ala e-commerce): bila pembeli sedang login di portal
+  // (cookie sesi terkirim otomatis oleh fetch same-origin), catat key akunnya
+  // sebagai owner_api_key — pesanan ini lalu muncul di "Pesanan Saya" walau
+  // yang diterbitkan adalah key BARU yang berbeda dari key sesi.
+  let ownerKey = "";
+  try {
+    const sToken = session.parseCookies(req.headers.cookie || "")[session.MEMBER_COOKIE];
+    const s = sToken ? session.getSession(sToken) : null;
+    if (s && s.role === "member" && s.api_key) {
+      const ada = db.prepare("SELECT 1 AS x FROM api_keys WHERE api_key = ?").get(s.api_key);
+      if (ada) ownerKey = s.api_key;
+    }
+  } catch { /* sesi tidak valid → pesanan tetap dibuat tanpa linkage */ }
+
   const orderCode = payment.generateOrderCode();
   const accessToken = payment.generateAccessToken();
   const expiresAt = Date.now() + ORDER_EXPIRY_HOURS * 3600_000;
@@ -158,12 +173,12 @@ router.post("/orders", async (req, res) => {
     .prepare(
       `INSERT INTO orders
         (order_code, access_token, mode, package_id, quota_tokens, user_name, email, whatsapp,
-         target_api_key, base_amount, unique_code, amount_to_pay, payment_method, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         target_api_key, owner_api_key, base_amount, unique_code, amount_to_pay, payment_method, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       orderCode, accessToken, mode, paket.id, paket.tokens, userName,
-      email, whatsapp, targetKey, paket.price, uniqueCode, amountToPay,
+      email, whatsapp, targetKey, ownerKey, paket.price, uniqueCode, amountToPay,
       QRIS_DANA_METHOD, expiresAt
     );
   const orderId = info.lastInsertRowid;
@@ -191,7 +206,8 @@ router.post("/orders", async (req, res) => {
     "dibuat",
     "pembeli",
     `Pesanan dibuat — ${paket.label} (${paket.tokens.toLocaleString("id-ID")} token), ` +
-      `tagihan ${pesanan.rupiah(amountToPay)} (kode unik +${uniqueCode}), berlaku ${ORDER_EXPIRY_HOURS} jam.`
+      `tagihan ${pesanan.rupiah(amountToPay)} (kode unik +${uniqueCode}), berlaku ${ORDER_EXPIRY_HOURS} jam.` +
+      (ownerKey ? ` Terhubung ke akun member ${ownerKey.slice(0, 14)}… (sesi portal aktif).` : "")
   );
 
   // 8. Notifikasi WA admin (best-effort, tanpa menahan respons)

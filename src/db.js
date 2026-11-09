@@ -86,6 +86,7 @@ db.exec(`
     whatsapp        TEXT    NOT NULL DEFAULT '',        -- tujuan notifikasi WA (opsional)
     target_api_key  TEXT    NOT NULL DEFAULT '',        -- mode topup: key yang ditambah
     api_key_issued  TEXT    NOT NULL DEFAULT '',        -- mode key_baru: key yang diterbitkan saat PAID
+    owner_api_key   TEXT    NOT NULL DEFAULT '',        -- key member yang membuat pesanan (sesi portal)
     base_amount     INTEGER NOT NULL,                   -- harga paket (sebelum kode unik)
     unique_code     INTEGER NOT NULL DEFAULT 0,         -- 1-999
     amount_to_pay   INTEGER NOT NULL,                   -- base_amount + unique_code
@@ -160,5 +161,16 @@ if (!kolomKeys.includes("expires_at")) {
 }
 // Indeks masa aktif dibuat SETELAH kolom dipastikan ada (database lama & baru).
 db.exec("CREATE INDEX IF NOT EXISTS idx_api_keys_expires ON api_keys (expires_at)");
+
+// Migrasi ringan: kolom pemilik pesanan (linkage lacak pesanan member).
+// Pesanan key_baru yang dibuat member dari portal/beli dicatat dengan key
+// akunnya, sehingga pesanan itu muncul di "Pesanan Saya" walau key yang
+// diterbitkan adalah key BARU yang berbeda dari key sesi.
+const kolomOrders = db.prepare("PRAGMA table_info(orders)").all().map((c) => c.name);
+if (!kolomOrders.includes("owner_api_key")) {
+  db.exec("ALTER TABLE orders ADD COLUMN owner_api_key TEXT NOT NULL DEFAULT ''");
+}
+// Indeks dibuat SETELAH kolom dipastikan ada (database lama & baru).
+db.exec("CREATE INDEX IF NOT EXISTS idx_orders_owner ON orders (owner_api_key)");
 
 module.exports = db;
