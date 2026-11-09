@@ -6,11 +6,12 @@
  *   GET /portal/member/usage  → per model, per hari (30 hari), log terakhir
  *
  * Struktur meniru dashboard Re:Link: kartu metrik di atas, lalu tab
- * Pemakaian / Model / Log Aktivitas / Kredensial.
+ * Integrasi / Top Up / Pemakaian / Model / Log Aktivitas.
  */
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const num = (n) => Number(n || 0).toLocaleString("id-ID");
+const rupiah = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
 
 /** Ringkas angka besar: 126.200.000 → "126,2M". */
 function kek(n) {
@@ -43,6 +44,8 @@ function jadwalkanAutoLogout(expiresAt) {
 
 function showLogin() {
   if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; }
+  hentikanTopupPolling();
+  hentikanTopupCountdown();
   $("loading").classList.add("hidden");
   $("panel").classList.add("hidden");
   $("login-section").classList.remove("hidden");
@@ -83,17 +86,28 @@ async function boot() {
 
   const pct = d.token_limit > 0 ? Math.round((d.tokens_used / d.token_limit) * 100) : 0;
 
-  // --- Peringatan + ajakan top-up otomatis (tautan ke toko /beli) ---
-  const tautanTopup = '<a class="btn small primary" style="margin-left:10px" href="/beli?mode=topup&key=' + encodeURIComponent(d.api_key) + '">Top-up Sekarang</a>';
+  // --- Peringatan + ajakan top-up: kuota habis / masa aktif mepet / kedaluwarsa ---
+  const tautanTopup = '<a class="btn small primary" style="margin-left:10px" href="#" onclick="bukaTopup();return false;">Top-up Sekarang</a>';
+  const peringatan = [];
   if (!d.is_active) {
-    $("status-warn").innerHTML = '<div class="alert err">Key Anda sedang dinonaktifkan. Akses chat diblokir. Hubungi admin.</div>';
-  } else if (d.tokens_remaining <= 0) {
-    $("status-warn").innerHTML = '<div class="alert err">Kuota token Anda habis. Top-up agar bisa memakai API kembali — aktif otomatis setelah bayar via QRIS.' + tautanTopup + '</div>';
-  } else if (pct >= 80) {
-    $("status-warn").innerHTML = `<div class="alert warn">Kuota terpakai <b>${pct}%</b>. Segera top-up sebelum habis — bayar QRIS, aktif otomatis.` + tautanTopup + '</div>';
+    peringatan.push('<div class="alert err">Key Anda sedang dinonaktifkan. Akses chat diblokir. Hubungi admin.</div>');
   } else {
-    $("status-warn").innerHTML = "";
+    if (d.key_expired) {
+      peringatan.push(
+        '<div class="alert err">Masa aktif key Anda berakhir pada <b>' + esc(d.key_masa_aktif_label || "") + '</b>. Akses chat ditolak — top-up untuk menambah kuota + memperpanjang 25 hari, aktif otomatis setelah bayar via QRIS.' + tautanTopup + '</div>'
+      );
+    } else if (d.tokens_remaining <= 0) {
+      peringatan.push('<div class="alert err">Kuota token Anda habis. Top-up agar bisa memakai API kembali — aktif otomatis setelah bayar via QRIS.' + tautanTopup + '</div>');
+    } else if (pct >= 80) {
+      peringatan.push(`<div class="alert warn">Kuota terpakai <b>${pct}%</b>. Segera top-up sebelum habis — bayar QRIS, aktif otomatis.` + tautanTopup + '</div>');
+    }
+    if (!d.key_expired && d.key_days_left != null && d.key_days_left <= 5) {
+      peringatan.push(
+        `<div class="alert warn">Masa aktif key tersisa <b>${num(d.key_days_left)} hari</b> (berakhir ${esc(d.key_masa_aktif_label || "")}). Top-up sekarang untuk memperpanjang 25 hari.` + tautanTopup + '</div>'
+      );
+    }
   }
+  $("status-warn").innerHTML = peringatan.join("");
 
   // --- Kartu metrik (meniru Re:Link: Quota / Terpakai / Prompt-completion / Request) ---
   $("cards").innerHTML = `
@@ -116,6 +130,11 @@ async function boot() {
       <div class="k"><svg class="ico" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg> Request</div>
       <div class="v">${num(d.requests)}</div>
       <div class="u2">total permintaan tercatat</div>
+    </div>
+    <div class="stat">
+      <div class="k"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Masa Aktif</div>
+      <div class="v">${d.key_expired ? "Habis" : d.key_days_left != null ? num(d.key_days_left) + " hari" : "—"}</div>
+      <div class="u2">${d.key_masa_aktif_label ? "berakhir " + esc(d.key_masa_aktif_label) : "tanpa batas waktu"}</div>
     </div>`;
 
   // --- Bar kuota ---
@@ -126,6 +145,12 @@ async function boot() {
 
   // --- Kredensial & panduan integrasi ---
   isiIntegrasi(d);
+
+  // --- Tab Top Up: info masa aktif, katalog, riwayat, lanjutkan pesanan tertunda ---
+  renderTopupMasa(d);
+  muatPaketTopup();
+  muatRiwayatTopup();
+  lanjutkanTopupTersimpan();
 
   await loadUsage();
 }
@@ -502,6 +527,371 @@ $("form-login").addEventListener("submit", async (e) => {
     btn.classList.remove("loading");
   }
 });
+
+// ============================================================
+// TAB TOP UP — beli kuota langsung dari dashboard member
+// Alur sama dengan halaman /beli (QRIS DANA otomatis): pilih paket →
+// POST /store/orders (mode 'topup', key milik sendiri) → tampil QR →
+// polling 5 dtk → COMPLETED → kuota & masa aktif otomatis ditambah.
+// ============================================================
+let PAKET_TOPUP = [];
+let paketTopupDipilih = null;
+let topupPesanan = null; // { kode, token, expires_at, amount, base_amount, unique_code, label, qr }
+let topupPollTimer = null;
+let topupCountdownTimer = null;
+let topupPolling = false;
+// Pesanan top-up yang sedang berjalan disimpan agar reload halaman tidak
+// membuat pembeli kehilangan QR pembayarannya (pola yang sama dengan /beli).
+const KUNCI_TOPUP = "thorhub_topup_portal";
+
+function aktifkanTab(nama) {
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === nama));
+  document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + nama));
+}
+
+/** Buka tab Top Up dari tombol mana pun (kartu kuota / banner peringatan). */
+function bukaTopup() {
+  aktifkanTab("topup");
+  muatPaketTopup();
+  muatRiwayatTopup();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("btn-buka-topup").onclick = bukaTopup;
+
+/** Kartu info masa aktif di atas form top-up. */
+function renderTopupMasa(d) {
+  if (!d) return;
+  const cls = d.key_expired ? "bad" : d.key_days_left != null && d.key_days_left <= 5 ? "warn" : "ok";
+  const sisa = d.key_expired ? "KEDALUWARSA" : d.key_days_left != null ? `${num(d.key_days_left)} hari lagi` : "—";
+  $("topup-masa").innerHTML = `
+    <div class="kv" style="margin-bottom:16px">
+      <div class="kv-row"><span>API Key Anda</span><b class="mono">${esc(d.api_key.slice(0, 18))}…</b></div>
+      <div class="kv-row"><span>Masa aktif berakhir</span><b>${esc(d.key_masa_aktif_label || "—")}</b></div>
+      <div class="kv-row"><span>Sisa masa aktif</span><b class="${cls}">${esc(sisa)}</b></div>
+    </div>`;
+}
+
+/* ---------- Katalog paket ---------- */
+async function muatPaketTopup() {
+  try {
+    const r = await fetch("/store/packages");
+    const data = ((await r.json()).data || {});
+    PAKET_TOPUP = data.packages || [];
+    if (!data.store_ready) {
+      $("topup-toko-status").innerHTML =
+        '<div class="alert warn">Toko sedang <b>ditutup</b> — pembayaran QRIS belum diaktifkan admin. Silakan hubungi admin.</div>';
+      $("btn-topup").disabled = true;
+    } else {
+      $("topup-toko-status").innerHTML = "";
+      $("btn-topup").disabled = false;
+    }
+    gambarPaketTopup();
+  } catch {
+    $("topup-toko-status").innerHTML = '<div class="alert err">Gagal memuat katalog paket. Klik Segarkan untuk mencoba lagi.</div>';
+  }
+}
+
+function gambarPaketTopup() {
+  const wrap = $("topup-pkg");
+  if (!PAKET_TOPUP.length) {
+    wrap.innerHTML = '<p class="muted">Katalog tidak tersedia.</p>';
+    return;
+  }
+  wrap.innerHTML = PAKET_TOPUP.map(
+    (p, i) => `
+    <button type="button" class="pkg${paketTopupDipilih?.id === p.id ? " active" : ""}" data-id="${esc(p.id)}" style="--i:${i}">
+      <span class="pkg-tok">${esc(p.label)}</span>
+      <span class="pkg-unit">token</span>
+      <span class="pkg-harga mono">${rupiah(p.price)}</span>
+    </button>`
+  ).join("");
+}
+
+$("topup-pkg").addEventListener("click", (e) => {
+  const btn = e.target.closest(".pkg");
+  if (!btn) return;
+  paketTopupDipilih = PAKET_TOPUP.find((p) => p.id === btn.dataset.id) || null;
+  gambarPaketTopup();
+});
+
+/* ---------- Buat pesanan top-up ---------- */
+$("form-topup").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!paketTopupDipilih) {
+    $("topup-msg").innerHTML = '<div class="alert err">Pilih salah satu paket di atas dulu.</div>';
+    return;
+  }
+  const btn = $("btn-topup");
+  btn.disabled = true;
+  btn.classList.add("loading");
+  $("topup-msg").innerHTML = "";
+  try {
+    const body = {
+      mode: "topup",
+      package_id: paketTopupDipilih.id,
+      user_name: DATA_ME.user_name,
+      api_key: DATA_ME.api_key,
+      email: $("t-email").value.trim(),
+      whatsapp: $("t-wa").value.trim(),
+    };
+    const r = await fetch("/store/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || "Gagal membuat pesanan.");
+
+    const pay = d.data.payment;
+    topupPesanan = {
+      kode: pay.order_code,
+      token: pay.access_token,
+      expires_at: pay.expires_at,
+      amount: pay.amount_to_pay,
+      base_amount: pay.base_amount,
+      unique_code: pay.unique_code,
+      label: paketTopupDipilih.label,
+      qr: pay.qr_image,
+    };
+    simpanTopupLokal();
+    tampilTopupBayar(pay.qr_image);
+  } catch (err) {
+    $("topup-msg").innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("loading");
+  }
+});
+
+/* ---------- Tampilan pembayaran ---------- */
+function tampilTopupBayar(qrImage) {
+  $("topup-card-form").classList.add("hidden");
+  $("topup-selesai").classList.add("hidden");
+  $("topup-bayar").classList.remove("hidden");
+  $("topup-bayar-msg").innerHTML = "";
+
+  $("topup-kode").textContent = topupPesanan.kode;
+  $("topup-amount").textContent = rupiah(topupPesanan.amount);
+  $("topup-harga").textContent = rupiah(topupPesanan.base_amount);
+  $("topup-kode-unik").textContent = "+" + num(topupPesanan.unique_code);
+  $("topup-paket").textContent = (topupPesanan.label || "") + " token";
+  $("topup-badge").textContent = "menunggu pembayaran";
+  $("topup-badge").className = "tag warn";
+  if (qrImage) {
+    $("topup-qr").src = qrImage;
+  }
+  mulaiTopupCountdown();
+  mulaiTopupPolling();
+}
+
+function mulaiTopupCountdown() {
+  hentikanTopupCountdown();
+  const perbarui = () => {
+    if (!topupPesanan) return;
+    const sisa = Math.max(0, topupPesanan.expires_at - Date.now());
+    const m = Math.floor(sisa / 60000);
+    const s = Math.floor((sisa % 60000) / 1000);
+    $("topup-expired").textContent = `${m}mnt ${String(s).padStart(2, "0")}dtk`;
+    if (sisa <= 0) {
+      hentikanTopupCountdown();
+      hentikanTopupPolling();
+      $("topup-badge").textContent = "kedaluwarsa";
+      $("topup-badge").className = "tag off";
+      $("topup-bayar-msg").innerHTML =
+        '<div class="alert warn">Tagihan kedaluwarsa. Silakan buat pesanan top-up baru bila masih ingin membeli.</div>' +
+        '<div class="row-actions"><button class="btn primary" id="btn-topup-ulang" type="button">Buat Pesanan Baru</button></div>';
+      const ulang = $("btn-topup-ulang");
+      if (ulang) ulang.onclick = kembaliKeFormTopup;
+      hapusTopupLokal();
+    }
+  };
+  perbarui();
+  topupCountdownTimer = setInterval(perbarui, 1000);
+}
+
+function hentikanTopupCountdown() {
+  if (topupCountdownTimer) clearInterval(topupCountdownTimer);
+  topupCountdownTimer = null;
+}
+
+function mulaiTopupPolling() {
+  hentikanTopupPolling();
+  topupPollTimer = setInterval(cekTopupStatus, 5000);
+  cekTopupStatus();
+}
+
+function hentikanTopupPolling() {
+  if (topupPollTimer) clearInterval(topupPollTimer);
+  topupPollTimer = null;
+}
+
+async function cekTopupStatus() {
+  if (topupPolling || !topupPesanan) return;
+  topupPolling = true;
+  try {
+    const r = await fetch(`/store/order/${encodeURIComponent(topupPesanan.kode)}?t=${encodeURIComponent(topupPesanan.token)}`);
+    const d = await r.json();
+    const o = d.data || {};
+    if (o.status === "PENDING" && o.qr_image && !$("topup-qr").src) $("topup-qr").src = o.qr_image;
+    if (o.status === "PAID") {
+      $("topup-badge").textContent = "dibayar — menambahkan kuota…";
+      $("topup-badge").className = "tag ok";
+    }
+    if (o.status === "CANCELLED") {
+      hentikanTopupPolling();
+      hentikanTopupCountdown();
+      $("topup-badge").textContent = "dibatalkan";
+      $("topup-badge").className = "tag off";
+      $("topup-bayar-msg").innerHTML =
+        '<div class="alert warn">Pesanan dibatalkan / kedaluwarsa.</div>' +
+        '<div class="row-actions"><button class="btn primary" id="btn-topup-ulang2" type="button">Buat Pesanan Baru</button></div>';
+      const ulang = $("btn-topup-ulang2");
+      if (ulang) ulang.onclick = kembaliKeFormTopup;
+      hapusTopupLokal();
+    }
+    if (o.status === "COMPLETED") {
+      hentikanTopupPolling();
+      hentikanTopupCountdown();
+      hapusTopupLokal();
+      tampilTopupSelesai(o);
+      boot(); // segarkan kuota, masa aktif & peringatan di dashboard
+      muatRiwayatTopup();
+    }
+  } catch {
+    /* jaringan gagal sesaat → coba lagi di tick berikutnya */
+  } finally {
+    topupPolling = false;
+  }
+}
+
+function kembaliKeFormTopup() {
+  topupPesanan = null;
+  $("topup-bayar").classList.add("hidden");
+  $("topup-selesai").classList.add("hidden");
+  $("topup-card-form").classList.remove("hidden");
+  $("topup-msg").innerHTML = "";
+}
+
+function tampilTopupSelesai(o) {
+  $("topup-bayar").classList.add("hidden");
+  $("topup-card-form").classList.add("hidden");
+  $("topup-selesai").classList.remove("hidden");
+  $("topup-selesai").innerHTML = `
+    <h1>
+      <svg class="ico" style="width:30px;height:30px;color:var(--lime)" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      <span>Top-up <span class="grad">Berhasil!</span></span>
+    </h1>
+    <span class="eyebrow">pesanan ${esc(o.order_code)} · +${num(o.quota_tokens)} token</span>
+    <p class="sub">Kuota sudah ditambahkan ke key Anda dan masa aktif diperpanjang 25 hari. Dashboard ini sudah diperbarui otomatis.</p>
+    <div class="kv">
+      <div class="kv-row"><span>Masa aktif berakhir</span><b>${esc(o.masa_aktif_sampai || "—")}</b></div>
+      <div class="kv-row"><span>Base URL</span><b class="mono">${esc(location.origin)}/v1</b></div>
+      <div class="kv-row"><span>Struk</span><b>dikirim ke email/WA bila diisi</b></div>
+    </div>
+    <div class="row-actions">
+      <a class="btn primary" href="#" onclick="aktifkanTab('integrasi');return false;">Lihat Kredensial</a>
+      <button class="btn" id="btn-topup-lagi" type="button">Top Up Lagi</button>
+    </div>`;
+  const lagi = $("btn-topup-lagi");
+  if (lagi) lagi.onclick = kembaliKeFormTopup;
+}
+
+/* ---------- Batalkan pesanan ---------- */
+$("btn-topup-batal").onclick = async () => {
+  if (!topupPesanan) return;
+  try {
+    const r = await fetch(`/store/order/${encodeURIComponent(topupPesanan.kode)}/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ access_token: topupPesanan.token }),
+    });
+    if (!r.ok) {
+      const d = await r.json();
+      throw new Error(d.error?.message || "Gagal membatalkan pesanan.");
+    }
+    hentikanTopupPolling();
+    hentikanTopupCountdown();
+    hapusTopupLokal();
+    kembaliKeFormTopup();
+    $("topup-msg").innerHTML = '<div class="alert warn">Pesanan top-up dibatalkan.</div>';
+  } catch (err) {
+    $("topup-bayar-msg").innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
+  }
+};
+
+$("btn-topup-salin").onclick = async () => {
+  if (!topupPesanan) return;
+  await navigator.clipboard.writeText(String(topupPesanan.amount));
+  $("btn-topup-salin").textContent = "✓ Tersalin";
+  setTimeout(() => ($("btn-topup-salin").textContent = "Salin Nominal"), 1200);
+};
+
+/* ---------- Riwayat transaksi member ---------- */
+async function muatRiwayatTopup() {
+  if (!DATA_ME) return;
+  const tb = $("topup-riwayat");
+  try {
+    const r = await fetch("/portal/member/orders", { credentials: "same-origin" });
+    if (!r.ok) throw new Error();
+    const rows = (await r.json()).data.orders || [];
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="6" class="muted">Belum ada transaksi tercatat.</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows
+      .map((o) => {
+        const cls = o.status === "COMPLETED" ? "ok" : o.status === "PENDING" ? "warn" : "off";
+        const jenis = o.mode === "key_baru" ? "Key baru" : "Top-up";
+        return `<tr>
+          <td class="mono muted">${esc(o.order_code)}</td>
+          <td>${jenis}</td>
+          <td>${num(o.quota_tokens)} token</td>
+          <td class="num">${rupiah(o.amount_to_pay)}</td>
+          <td><span class="tag ${cls}">${esc(o.status_label || o.status)}</span></td>
+          <td class="mono muted">${esc(o.created_at)}</td>
+        </tr>`;
+      })
+      .join("");
+  } catch {
+    tb.innerHTML = '<tr><td colspan="6" class="muted">Gagal memuat riwayat transaksi.</td></tr>';
+  }
+}
+
+/* ---------- Pesanan top-up tertunda (localStorage) ---------- */
+function simpanTopupLokal() {
+  try {
+    localStorage.setItem(KUNCI_TOPUP, JSON.stringify(topupPesanan));
+  } catch { /* localStorage nonaktif */ }
+}
+
+function bacaTopupLokal() {
+  try {
+    const raw = localStorage.getItem(KUNCI_TOPUP);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function hapusTopupLokal() {
+  try {
+    localStorage.removeItem(KUNCI_TOPUP);
+  } catch { /* abaikan */ }
+}
+
+/** Ada pesanan top-up yang belum selesai saat halaman dimuat? Lanjutkan. */
+function lanjutkanTopupTersimpan() {
+  const lama = bacaTopupLokal();
+  if (!lama || !lama.kode || !lama.token) return;
+  if (!lama.expires_at || lama.expires_at <= Date.now()) {
+    hapusTopupLokal();
+    return;
+  }
+  topupPesanan = lama;
+  tampilTopupBayar(lama.qr || "");
+}
 
 // Tangkap error boot() agar tidak menjadi "unhandled promise rejection".
 boot().catch(() => showLogin());

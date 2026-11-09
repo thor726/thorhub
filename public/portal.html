@@ -127,6 +127,10 @@
             Kuota Token
           </h2>
           <span class="mono muted" id="quota-text">…</span>
+          <button class="btn small primary" id="btn-buka-topup" type="button">
+            <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Top Up
+          </button>
         </div>
         <div class="quota-bar"><div class="quota-fill" id="quota-fill"></div></div>
       </div>
@@ -136,6 +140,10 @@
         <button class="tab active" data-tab="integrasi" role="tab">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
           Integrasi API
+        </button>
+        <button class="tab" data-tab="topup" role="tab">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/><rect x="2" y="3" width="20" height="18" rx="2"/></svg>
+          Top Up
         </button>
         <button class="tab" data-tab="pemakaian" role="tab">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
@@ -168,6 +176,123 @@
             Ringkasan
           </h2>
           <div class="kv" id="ringkasan"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Top Up -->
+      <div class="tab-panel" id="tab-topup">
+        <!-- Langkah 1: pilih paket & bayar -->
+        <div class="card" id="topup-card-form">
+          <h2>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/><rect x="2" y="3" width="20" height="18" rx="2"/></svg>
+            Top Up Kuota Token
+          </h2>
+          <p class="muted" style="margin-top:0;font-size:13px">
+            Tambah kuota untuk key Anda sendiri — bayar via <b>QRIS DANA</b>, kuota &amp; masa aktif aktif
+            <b>otomatis</b> begitu pembayaran terkonfirmasi. Masa aktif key diperpanjang <b>25 hari</b> setiap top-up.
+          </p>
+          <div id="topup-masa"></div>
+          <div id="topup-toko-status"></div>
+          <label>Pilih Paket</label>
+          <div class="pkg-grid" id="topup-pkg">
+            <div class="loading-box"><span class="spinner sm"></span> memuat paket…</div>
+          </div>
+          <form id="form-topup" style="margin-top:18px">
+            <div class="grid-2">
+              <div>
+                <label for="t-email">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+                  Email (untuk struk)
+                </label>
+                <input id="t-email" type="email" placeholder="cth: budi@mail.com" />
+                <p class="hint">Struk pembayaran dikirim ke email ini (opsional).</p>
+              </div>
+              <div>
+                <label for="t-wa">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  WhatsApp (opsional)
+                </label>
+                <input id="t-wa" type="tel" inputmode="tel" placeholder="cth: 0812xxxxxxx" />
+                <p class="hint">Konfirmasi top-up dikirim ke WA ini.</p>
+              </div>
+            </div>
+            <div class="row-actions">
+              <button class="btn primary w-full" type="submit" id="btn-topup">
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+                Bayar dengan QRIS DANA
+              </button>
+            </div>
+          </form>
+          <div id="topup-msg"></div>
+        </div>
+
+        <!-- Langkah 2: pembayaran QR (dipakai ulang gaya halaman /beli) -->
+        <div class="card pay-card hidden" id="topup-bayar">
+          <div class="pay-head">
+            <h2 style="margin:0">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+              Bayar Pesanan <span class="mono" id="topup-kode">—</span>
+            </h2>
+            <span class="tag warn" id="topup-badge">menunggu pembayaran</span>
+          </div>
+          <div class="pay-grid">
+            <div class="qr-side">
+              <div class="qr-frame">
+                <img id="topup-qr" alt="QRIS pembayaran" />
+              </div>
+              <p class="qr-caption">Scan dengan <b>DANA</b>, GoPay, OVO, ShopeePay, atau m-banking apa pun</p>
+            </div>
+            <div class="pay-info">
+              <div class="amount-box">
+                <div class="k">Total Bayar (nominal harus PERSIS)</div>
+                <div class="v mono" id="topup-amount">Rp —</div>
+                <button class="btn small" id="btn-topup-salin" type="button">
+                  <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Salin Nominal
+                </button>
+              </div>
+              <div class="kv" style="margin-top:16px">
+                <div class="kv-row"><span>Harga paket</span><b id="topup-harga">—</b></div>
+                <div class="kv-row"><span>Kode unik pesanan</span><b id="topup-kode-unik">—</b></div>
+                <div class="kv-row"><span>Paket</span><b id="topup-paket">—</b></div>
+                <div class="kv-row"><span>Bayar sebelum</span><b id="topup-expired">—</b></div>
+              </div>
+              <div class="pay-steps">
+                <div class="pay-step"><span class="no">1</span> Scan QRIS di atas</div>
+                <div class="pay-step"><span class="no">2</span> Bayar <b>nominal persis</b> (termasuk kode unik)</div>
+                <div class="pay-step"><span class="no">3</span> Kuota &amp; masa aktif otomatis ditambahkan</div>
+              </div>
+              <p class="muted" style="font-size:12.5px;margin-bottom:0">
+                <span class="dot" id="topup-poll-dot"></span> Memeriksa pembayaran otomatis setiap 5 detik. Jangan tutup halaman ini.
+              </p>
+              <div class="row-actions" style="margin-top:12px">
+                <button class="btn small danger" id="btn-topup-batal" type="button">Batalkan Pesanan</button>
+              </div>
+            </div>
+          </div>
+          <div id="topup-bayar-msg"></div>
+        </div>
+
+        <!-- Langkah 3: selesai -->
+        <div class="card hidden" id="topup-selesai"></div>
+
+        <!-- Riwayat transaksi -->
+        <div class="card">
+          <h2>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Riwayat Transaksi
+          </h2>
+          <p class="muted" style="margin-top:0;font-size:13px">25 transaksi terakhir yang terkait dengan key Anda — pembelian key &amp; top-up.</p>
+          <div class="table-scroll">
+            <table class="models-table">
+              <thead>
+                <tr><th>Kode</th><th>Jenis</th><th>Paket</th><th class="num">Nominal</th><th>Status</th><th>Tanggal</th></tr>
+              </thead>
+              <tbody id="topup-riwayat">
+                <tr><td colspan="6"><div class="loading-box"><span class="spinner sm"></span> memuat…</div></td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

@@ -14,10 +14,11 @@ const express = require("express");
 const crypto = require("crypto");
 const config = require("../config");
 const db = require("../db");
+const masaAktif = require("../lib/masa-aktif");
 
 const router = express.Router();
 
-const LIST_COLS = "id, api_key, user_name, token_limit, tokens_used, is_active, created_at";
+const LIST_COLS = "id, api_key, user_name, token_limit, tokens_used, is_active, created_at, expires_at";
 
 function safeEqual(a, b) {
   const ha = crypto.createHash("sha256").update(String(a)).digest();
@@ -38,7 +39,7 @@ function requireAdmin(req, res, next) {
 function decorate(row) {
   if (!row) return row;
   return {
-    ...row,
+    ...masaAktif.decorateKey(row),
     is_active: !!row.is_active,
     tokens_remaining: Math.max(0, row.token_limit - row.tokens_used),
   };

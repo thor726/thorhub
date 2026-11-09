@@ -22,7 +22,8 @@ db.exec(`
     token_limit  INTEGER NOT NULL,
     tokens_used  INTEGER NOT NULL DEFAULT 0,
     is_active    INTEGER NOT NULL DEFAULT 1,
-    created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
+    created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now')),
+    expires_at   TEXT                            -- masa aktif habis (SQLite UTC), NULL = tanpa batas
   );
 
   CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys (api_key);
@@ -148,5 +149,16 @@ const kolomEvents = db.prepare("PRAGMA table_info(payment_events)").all().map((c
 if (!kolomEvents.includes("ip")) {
   db.exec("ALTER TABLE payment_events ADD COLUMN ip TEXT NOT NULL DEFAULT ''");
 }
+
+// Migrasi ringan: kolom masa aktif API Key (masa aktif token 25 hari).
+// Key yang sudah ada sebelum fitur ini otomatis diberi masa aktif
+// created_at + 25 hari (key test lama yang baru dibuat tetap berlaku).
+const kolomKeys = db.prepare("PRAGMA table_info(api_keys)").all().map((c) => c.name);
+if (!kolomKeys.includes("expires_at")) {
+  db.exec("ALTER TABLE api_keys ADD COLUMN expires_at TEXT");
+  db.exec("UPDATE api_keys SET expires_at = datetime(created_at, '+25 days') WHERE expires_at IS NULL");
+}
+// Indeks masa aktif dibuat SETELAH kolom dipastikan ada (database lama & baru).
+db.exec("CREATE INDEX IF NOT EXISTS idx_api_keys_expires ON api_keys (expires_at)");
 
 module.exports = db;

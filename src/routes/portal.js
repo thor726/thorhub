@@ -19,6 +19,7 @@ const db = require("../db");
 const session = require("../lib/session");
 const models = require("../lib/models");
 const bruteforce = require("../lib/bruteforce");
+const masaAktif = require("../lib/masa-aktif");
 const DEFAULT_MODEL = models.DEFAULT_MODEL;
 
 // Cache sederhana daftar model (hindari spam ke provider tiap request)
@@ -153,11 +154,10 @@ router.get("/admin/me", requireAdminSession, (req, res) => {
 });
 
 // ---- Kelola key via sesi panel (tanpa mengekspos ADMIN_API_KEY ke browser) ----
-const LIST_COLS = "id, api_key, user_name, token_limit, tokens_used, is_active, created_at";
+const LIST_COLS = "id, api_key, user_name, token_limit, tokens_used, is_active, created_at, expires_at";
 
 function decorate(row) {
-  if (!row) return row;
-  return { ...row, is_active: !!row.is_active, tokens_remaining: Math.max(0, row.token_limit - row.tokens_used) };
+  return masaAktif.decorateKey(row); // tambah expired / days_left / masa_aktif_label
 }
 
 // GET /portal/admin/keys — daftar semua key
@@ -181,6 +181,7 @@ router.get("/admin/usage", requireAdminSession, (_req, res) => {
 });
 
 // POST /portal/admin/keys — terbitkan key baru { user_name, token_limit }
+// Masa aktif key otomatis 25 hari (config.keyValidityDays) sejak diterbitkan.
 router.post("/admin/keys", requireAdminSession, (req, res) => {
   const { user_name, token_limit } = req.body || {};
   if (!user_name || typeof user_name !== "string" || !user_name.trim()) {
@@ -190,9 +191,10 @@ router.post("/admin/keys", requireAdminSession, (req, res) => {
     return res.status(400).json({ error: { message: "Field token_limit harus bilangan bulat positif.", code: "invalid_request" } });
   }
   const apiKey = `sk-thor-${crypto.randomBytes(24).toString("hex")}`;
+  const expiresAt = masaAktif.masaAktifBaru();
   const info = db
-    .prepare("INSERT INTO api_keys (api_key, user_name, token_limit) VALUES (?, ?, ?)")
-    .run(apiKey, user_name.trim(), token_limit);
+    .prepare("INSERT INTO api_keys (api_key, user_name, token_limit, expires_at) VALUES (?, ?, ?, ?)")
+    .run(apiKey, user_name.trim(), token_limit, expiresAt);
   const row = db.prepare(`SELECT ${LIST_COLS} FROM api_keys WHERE id = ?`).get(info.lastInsertRowid);
   res.status(201).json({ data: decorate(row) });
 });
@@ -695,9 +697,46 @@ router.get("/member/me", requireMemberSession, (req, res) => {
       tokens_remaining: Math.max(0, row.token_limit - row.tokens_used),
       is_active: !!row.is_active,
       created_at: row.created_at,
+      // Masa aktif key (25 hari / perpanjangan top-up terakhir):
+      key_expires_at: row.expires_at || null,
+      key_expired: masaAktif.expiryMs(row.expires_at) != null && Date.now() >= masaAktif.expiryMs(row.expires_at),
+      key_days_left:
+        masaAktif.expiryMs(row.expires_at) == null
+          ? null
+          : Math.max(0, Math.ceil((masaAktif.expiryMs(row.expires_at) - Date.now()) / masaAktif.MS_HARI)),
+      key_masa_aktif_label: masaAktif.formatWaktuIndo(row.expires_at),
       requests: agg.requests,
       prompt_tokens: agg.prompt_tokens,
       completion_tokens: agg.completion_tokens,
+    },
+  });
+});
+
+// GET /portal/member/orders — riwayat transaksi milik member ini (top-up ke
+// key miliknya ATAU pesanan key_baru yang menerbitkan key miliknya).
+// Dipakai tab Top Up di dashboard member agar pembeli bisa melacak pembayarannya
+// seperti di toko online tanpa bisa melihat pesanan member lain.
+router.get("/member/orders", requireMemberSession, (req, res) => {
+  const row = db.prepare("SELECT id, api_key FROM api_keys WHERE api_key = ?").get(req.session.api_key);
+  if (!row) {
+    session.destroySession(session.parseCookies(req.headers.cookie)[session.MEMBER_COOKIE]);
+    return res.status(401).json({ error: { message: "Key Anda sudah tidak terdaftar.", code: "invalid_api_key" } });
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT order_code, mode, package_id, quota_tokens, base_amount, unique_code, amount_to_pay,
+              payment_method, status, note, created_at, paid_at, completed_at
+       FROM orders
+       WHERE target_api_key = ? OR (mode = 'key_baru' AND api_key_issued = ?)
+       ORDER BY id DESC
+       LIMIT 25`
+    )
+    .all(row.api_key, row.api_key);
+
+  res.json({
+    data: {
+      orders: rows.map((o) => ({ ...o, status_label: LABEL_STATUS[o.status] || o.status })),
     },
   });
 });

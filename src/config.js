@@ -24,6 +24,10 @@ const config = {
   // URL publik toko (opsional) — dipakai untuk tautan di WA/email notifikasi,
   // mis. "https://llm.thormarket.site". Tanpa ini tautan memakai path relatif.
   publicBaseUrl: (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, ""),
+  // Masa aktif API Key (hari) sejak diterbitkan — permintaan pemilik toko: 25 hari.
+  // Setiap top-up yang dibayar otomatis memperpanjang masa aktif 25 hari lagi
+  // (dihitung dari masa aktif terlama: sisa masa aktif lama ATAU sekarang).
+  keyValidityDays: intOr(process.env.KEY_VALIDITY_DAYS, 25),
 };
 
 if (!config.masterApiKey) {

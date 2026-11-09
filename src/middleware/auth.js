@@ -1,14 +1,16 @@
 /**
- * auth.js — Middleware otentikasi API Key + validasi kuota.
+ * auth.js — Middleware otentikasi API Key + validasi kuota & masa aktif.
  *
  * Urutan pemeriksaan (sesuai spesifikasi):
  *   1. 401 → header Authorization hilang / format salah / key tidak ditemukan
  *   2. 403 → key dinonaktifkan (is_active = false)
- *   3. 403 → kuota habis (tokens_used >= token_limit)
+ *   3. 403 → masa aktif habis (expires_at terlewati — default 25 hari)
+ *   4. 403 → kuota habis (tokens_used >= token_limit)
  *
  * Format error meniru gaya OpenAI agar SDK/_client pembeli tetap kompatibel.
  */
 const db = require("../db");
+const masaAktif = require("../lib/masa-aktif");
 
 const stmtGetByKey = db.prepare("SELECT * FROM api_keys WHERE api_key = ?");
 
@@ -48,6 +50,19 @@ function authenticateSubKey(req, res, next) {
         message: "API Key Anda sedang dinonaktifkan. Silakan hubungi admin.",
         type: "insufficient_quota",
         code: "key_disabled",
+      },
+    });
+  }
+
+  // 3. Masa aktif habis (25 hari sejak terbit / top-up terakhir).
+  //    Tetap diarahkan ke portal agar member tahu cara memperpanjang.
+  const expMs = masaAktif.expiryMs(row.expires_at);
+  if (expMs != null && Date.now() >= expMs) {
+    return res.status(403).json({
+      error: {
+        message: `Masa aktif API Key Anda berakhir pada ${masaAktif.formatWaktuIndo(expMs)}. Lakukan top-up untuk menambah kuota & memperpanjang masa aktif ${masaAktif.MASA_AKTIF_HARI} hari.`,
+        type: "insufficient_quota",
+        code: "key_expired",
       },
     });
   }

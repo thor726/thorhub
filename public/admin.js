@@ -326,7 +326,7 @@ async function bukaDetail(apiKey, nama) {
           <tbody>${model}</tbody>
         </table>
       </div>
-      <p class="muted" style="font-size:12.5px;margin-top:12px">Dibuat: ${esc(k.created_at)} · Sisa: ${num(k.tokens_remaining)} token</p>`;
+      <p class="muted" style="font-size:12.5px;margin-top:12px">Dibuat: ${esc(k.created_at)} · Sisa: ${num(k.tokens_remaining)} token${k.masa_aktif_label ? ` · Masa aktif: ${esc(k.masa_aktif_label)}${k.expired ? " (kedaluwarsa)" : ` — sisa ${k.days_left} hari`}` : ""}</p>`;
   } catch (err) {
     if (err.message !== "unauthorized") $("modal-body").innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
   }
@@ -361,6 +361,7 @@ async function loadKeys() {
       </td>
       <td>${num(k.tokens_used)} / ${num(k.token_limit)} <span class="muted">(${pct}%)</span></td>
       <td>${k.is_active ? '<span class="tag ok">AKTIF</span>' : '<span class="tag off">BLOKIR</span>'}</td>
+      <td>${masaAktifSel(k)}</td>
       <td>${esc(k.created_at)}</td>
       <td style="white-space:nowrap">
         <button class="btn small" data-act="detail">Detail</button>
@@ -373,9 +374,17 @@ async function loadKeys() {
   }).join("");
 
   wrap.innerHTML = `<div class="table-scroll"><table class="stagger-rows">
-    <thead><tr><th>ID</th><th>Nama</th><th>API Key</th><th>Pemakaian</th><th>Status</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+    <thead><tr><th>ID</th><th>Nama</th><th>API Key</th><th>Pemakaian</th><th>Status</th><th>Masa Aktif</th><th>Dibuat</th><th>Aksi</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+
+/** Sel masa aktif: tanggal singkat + tag sisa hari / kedaluwarsa. */
+function masaAktifSel(k) {
+  if (!k.expires_at) return '<span class="muted">—</span>';
+  if (k.expired) return `<span class="mono">${esc(k.masa_aktif_tanggal || "")}</span> <span class="tag off">kedaluwarsa</span>`;
+  const dekat = k.days_left != null && k.days_left <= 5;
+  return `<span class="mono">${esc(k.masa_aktif_tanggal || "")}</span> <span class="tag ${dekat ? "warn" : "ok"}">${k.days_left}h lagi</span>`;
 }
 
 // ---- Login ----

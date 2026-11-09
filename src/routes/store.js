@@ -29,6 +29,7 @@ const qris = require("../lib/qris");
 const notify = require("../lib/notify");
 const ratelimit = require("../lib/ratelimit");
 const pesanan = require("../lib/pesanan");
+const masaAktif = require("../lib/masa-aktif");
 
 const { QRIS_DANA_METHOD, ORDER_EXPIRY_HOURS } = payment;
 
@@ -283,6 +284,15 @@ router.get("/order/:code", async (req, res) => {
     if (order.mode === "topup") {
       payload.target_api_key_masked = order.target_api_key.slice(0, 18) + "…";
       payload.added_tokens = order.quota_tokens;
+    }
+    // Masa aktif key terkait (baru diterbitkan ATAU diperpanjang top-up) —
+    // ditampilkan di halaman sukses pembeli & dipakai polling portal member.
+    const apiK = order.mode === "key_baru" ? order.api_key_issued : order.target_api_key;
+    const exp = masaAktif.expiryKeyDariDb(apiK);
+    const expMs = masaAktif.expiryMs(exp);
+    if (expMs != null) {
+      payload.masa_aktif_sampai = masaAktif.formatWaktuIndo(expMs);
+      payload.key_days_left = Math.max(0, Math.ceil((expMs - Date.now()) / masaAktif.MS_HARI));
     }
   }
 

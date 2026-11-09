@@ -270,7 +270,8 @@ function tampilSelesai(o) {
         <p style="margin:0;line-height:1.8">
           • <b>API Base URL:</b> <code class="mono">${esc(API_BASE)}</code><br>
           • <b>Dashboard member:</b> <a href="${esc(PORTAL_URL)}">${esc(PORTAL_URL)}</a> — masuk dengan API Key di atas<br>
-          • Kirim request ke Base URL di atas dengan header <code class="mono">Authorization: Bearer &lt;key&gt;</code>
+          • Kirim request ke Base URL di atas dengan header <code class="mono">Authorization: Bearer &lt;key&gt;</code><br>
+          • <b>Masa aktif:</b> 25 hari${o.masa_aktif_sampai ? ` — sampai ${esc(o.masa_aktif_sampai)}` : ""} · top-up memperpanjang 25 hari lagi
         </p>
       </div>
       <p class="muted" style="margin-bottom:0;font-size:13px">
@@ -302,7 +303,8 @@ function tampilSelesai(o) {
       <div class="box-info">
         <p style="margin:0;line-height:1.8">
           • <b>API Base URL:</b> <code class="mono">${esc(API_BASE)}</code><br>
-          • <b>Dashboard member:</b> <a href="${esc(PORTAL_URL)}">${esc(PORTAL_URL)}</a>
+          • <b>Dashboard member:</b> <a href="${esc(PORTAL_URL)}">${esc(PORTAL_URL)}</a><br>
+          • <b>Masa aktif diperpanjang:</b>${o.masa_aktif_sampai ? ` sampai <b>${esc(o.masa_aktif_sampai)}</b>` : " +25 hari"} — sisa masa aktif lama tidak hangus
         </p>
       </div>`;
   }

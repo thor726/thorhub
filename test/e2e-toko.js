@@ -100,6 +100,10 @@ async function main() {
   const cookie = (login.headers.get("set-cookie") || "").split(";")[0];
 
   let r = await api("GET", "/store/packages");
+  // DB sandbox dipakai bersama (bisa berisi konfigurasi QRIS dari uji sebelumnya)
+  // → reset dulu agar alur "toko tutup → dikonfigurasi" selalu teruji dari nol.
+  require(path.join(ROOT, "src/db")).prepare("DELETE FROM settings WHERE key = 'qris'").run();
+  r = await api("GET", "/store/packages");
   ok("katalog paket publik", r.status === 200 && r.data.data.packages.length === 6);
   ok("toko belum siap (belum dikonfigurasi)", r.data.data.store_ready === false);
 
@@ -173,10 +177,17 @@ async function main() {
   const keyBaru = r.data.data.api_key;
   ok("status COMPLETED + API key diterbitkan", r.data.data.status === "COMPLETED" && /^sk-thor-[0-9a-f]{48}$/.test(keyBaru || ""), String(r.data.data.api_key).slice(0, 24));
 
-  // Key baru benar-benar terdaftar dengan kuota benar
+  // Key baru benar-benar terdaftar dengan kuota benar + masa aktif 25 hari
   const db = require(path.join(ROOT, "src/db"));
   const keyRow = db.prepare("SELECT * FROM api_keys WHERE api_key = ?").get(keyBaru);
   ok("key terdaftar di DB (kuota 10.000.000)", !!keyRow && keyRow.token_limit === 10_000_000);
+  const masaMs = keyRow.expires_at ? new Date(keyRow.expires_at.replace(" ", "T") + "Z").getTime() : 0;
+  const selisihHari = (masaMs - Date.now()) / 86400000;
+  ok("masa aktif key baru = 25 hari (± 1 jam)", selisihHari > 24.9 && selisihHari < 25.1, String(selisihHari.toFixed(2)));
+
+  // Status COMPLETED memuat info masa aktif untuk halaman sukses
+  r = await api("GET", `/store/order/${order.order_code}?t=${pay.access_token}`);
+  ok("payload selesai memuat masa_aktif_sampai", /\d{1,2} \w{3} \d{4}/.test(r.data.data.masa_aktif_sampai || ""), String(r.data.data.masa_aktif_sampai));
 
   // Notif WA/email gagal diam-diam (best-effort) — tidak menjatuhkan alur ✓ (implisit)
 
@@ -207,8 +218,41 @@ async function main() {
   const keyRow2 = db.prepare("SELECT * FROM api_keys WHERE api_key = ?").get(keyBaru);
   ok("token_limit bertambah +20.000.000", keyRow2.token_limit === 30_000_000, String(keyRow2.token_limit));
 
-  // === 5. Konfirmasi manual admin (order kurang bayar) ===
-  console.log("\n[4] Konfirmasi manual & audit");
+  // Masa aktif DIPERPANJANG oleh top-up: dari sisa masa aktif lama + 25 hari
+  const sisaLamaMs = masaMs - Date.now();
+  const masaBaruMs = keyRow2.expires_at ? new Date(keyRow2.expires_at.replace(" ", "T") + "Z").getTime() : 0;
+  const tambahanHari = (masaBaruMs - Date.now() - Math.max(0, sisaLamaMs)) / 86400000;
+  ok("topup memperpanjang masa aktif 25 hari (dari sisa lama)", tambahanHari > 24.9 && tambahanHari < 25.1, String(tambahanHari.toFixed(2)));
+
+  // === 5. Portal member: masa aktif + riwayat transaksi ===
+  console.log("\n[5] Portal member (masa aktif & riwayat)");
+  r = await api("POST", "/portal/member/login", { api_key: keyBaru });
+  ok("login member", r.status === 200, JSON.stringify(r.data));
+  const cookieM = (r.headers.get("set-cookie") || "").split(";")[0];
+  r = await api("GET", "/portal/member/me", null, { cookie: cookieM });
+  const me = r.data.data || {};
+  // Setelah top-up: sisa masa aktif lama (±25 hari) + 25 hari = ±50 hari
+  ok("/member/me memuat days_left 25-51 (topup memperpanjang)", me.key_days_left >= 25 && me.key_days_left <= 51, JSON.stringify({ d: me.key_days_left }));
+  ok("/member/me memuat label masa aktif", /\d{1,2} \w{3} \d{4}/.test(me.key_masa_aktif_label || ""), String(me.key_masa_aktif_label));
+  r = await api("GET", "/portal/member/orders", null, { cookie: cookieM });
+  const ordersM = (r.data.data || {}).orders || [];
+  ok("/member/orders memuat pesanan topup sendiri", ordersM.some((o) => o.order_code === topup.order.order_code), String(ordersM.length));
+  r = await api("GET", "/portal/member/orders");
+  ok("/member/orders tanpa sesi → 401", r.status === 401);
+
+  // === 6. Key kedaluwarsa ditolak middleware chat (403 key_expired) ===
+  console.log("\n[6] Key kedaluwarsa ditolak");
+  const keyExp = `sk-thor-${crypto.randomBytes(24).toString("hex")}`;
+  db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit, expires_at) VALUES (?, ?, ?, ?)").run(
+    keyExp, "Uji Kedaluwarsa", 1_000_000, "2026-01-01 00:00:00"
+  );
+  r = await api("POST", "/v1/chat/completions", { model: "mock-gpt", messages: [{ role: "user", content: "hi" }] }, { Authorization: `Bearer ${keyExp}` });
+  ok("chat key kedaluwarsa → 403", r.status === 403, JSON.stringify(r.data));
+  ok("kode error key_expired + arahan top-up", r.data.error?.code === "key_expired" && /top-up/i.test(r.data.error?.message || ""), JSON.stringify(r.data.error));
+  db.prepare("DELETE FROM api_keys WHERE api_key = ?").run(keyExp);
+
+  // === 7. Konfirmasi manual admin (order kurang bayar) ===
+  console.log("\n[7] Konfirmasi manual & audit");
   r = await api("POST", "/store/orders", { mode: "key_baru", package_id: "50m", user_name: "Citra", email: "citra@mail.com" });
   const citra = r.data.data;
   r = await api("POST", `/portal/admin/orders/${citra.order.order_code}/confirm`, {}, { cookie });
@@ -217,7 +261,7 @@ async function main() {
   ok("key Citra diterbitkan", /^sk-thor-/.test(citraKey || ""));
 
   r = await api("GET", "/portal/admin/orders?limit=10", null, { cookie });
-  ok("daftar pesanan admin berisi semua transaksi", r.data.data.orders.length === 3, String(r.data.data.orders.length));
+  ok("daftar pesanan admin berisi semua transaksi", r.data.data.orders.length >= 3, String(r.data.data.orders.length));
   ok("riwayat webhook tercatat (audit)", r.data.data.events.length >= 5, String(r.data.data.events.length));
 
   // Endpoint admin dilindungi
@@ -233,6 +277,15 @@ async function main() {
   r = await api("POST", "/store/orders", { mode: "key_baru", package_id: "200m", user_name: "Dedi", email: "dedi@mail.com" });
   const dedi = r.data.data;
   ok("order 200jt dapat nominal unik", dedi.payment.amount_to_pay >= 130001);
+
+  // Isolasi riwayat member: pesanan Citra & Dedi TIDAK muncul di riwayat Budi
+  r = await api("GET", "/portal/member/orders", null, { cookie: cookieM });
+  const ordersM2 = (r.data.data || {}).orders || [];
+  ok(
+    "isolasi riwayat: pesanan member lain tidak bocor",
+    !ordersM2.some((o) => o.order_code === citra.order.order_code || o.order_code === dedi.order.order_code),
+    JSON.stringify(ordersM2.map((o) => o.order_code))
+  );
 
   console.log(gagal === 0 ? "\n✅ SEMUA UJI LULUS" : `\n❌ ${gagal} UJI GAGAL`);
   process.exitCode = gagal === 0 ? 0 : 1;

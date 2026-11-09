@@ -14,6 +14,7 @@ const db = require("../db");
 const payment = require("./payment");
 const notify = require("./notify");
 const pesanan = require("./pesanan");
+const masaAktif = require("./masa-aktif");
 
 /** Katalog paket kuota — harga Rupiah tetap, token per paket. */
 const PACKAGES = [
@@ -78,27 +79,37 @@ function waktuSql(d = new Date()) {
 
 /**
  * Buat key API baru untuk pesanan 'key_baru' (mirip POST /portal/admin/keys).
- * @returns {string} API key yang diterbitkan
+ * Masa aktif key = 25 hari sejak diterbitkan (masaAktif.masaAktifBaru).
+ * @returns {{apiKey: string, expiresAt: string}} API key & masa aktifnya
  */
 function terbitkanKeyUntukPesanan(order) {
   const apiKey = `sk-thor-${crypto.randomBytes(24).toString("hex")}`;
-  db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit) VALUES (?, ?, ?)").run(
+  const expiresAt = masaAktif.masaAktifBaru();
+  db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit, expires_at) VALUES (?, ?, ?, ?)").run(
     apiKey,
     order.user_name,
-    order.quota_tokens
+    order.quota_tokens,
+    expiresAt
   );
-  return apiKey;
+  return { apiKey, expiresAt };
 }
 
 /**
- * Tambah kuota untuk pesanan 'topup'.
- * @returns {boolean} true bila key target masih ada (dan kuota ditambah)
+ * Tambah kuota untuk pesanan 'topup' — SEKALIGUS perpanjang masa aktif key
+ * menjadi max(sekarang, masa aktif lama) + 25 hari (aturan toko token:
+ * top-up selalu memperpanjang, sisa masa aktif lama tidak hangus).
+ * @returns {string|null} masa aktif baru (string SQLite) bila sukses, null bila key target hilang
  */
 function tambahKuotaUntukPesanan(order) {
-  const key = db.prepare("SELECT id FROM api_keys WHERE api_key = ?").get(order.target_api_key);
-  if (!key) return false;
-  db.prepare("UPDATE api_keys SET token_limit = token_limit + ? WHERE id = ?").run(order.quota_tokens, key.id);
-  return true;
+  const key = db.prepare("SELECT id, expires_at FROM api_keys WHERE api_key = ?").get(order.target_api_key);
+  if (!key) return null;
+  const masaBaru = masaAktif.perpanjangMasaAktif(key.expires_at);
+  db.prepare("UPDATE api_keys SET token_limit = token_limit + ?, expires_at = ? WHERE id = ?").run(
+    order.quota_tokens,
+    masaBaru,
+    key.id
+  );
+  return masaBaru;
 }
 
 /**
@@ -135,24 +146,34 @@ function prosesPesananLunas(order, opts = {}) {
   // 2. Fulfillment
   let selesai = false;
   let catatan = "";
+  let masaAktifBaru = "";
   try {
     if (order.mode === "key_baru") {
-      const apiKey = terbitkanKeyUntukPesanan(order);
-      db.prepare(`UPDATE orders SET api_key_issued = ? WHERE id = ?`).run(apiKey, order.id);
-      order.api_key_issued = apiKey;
+      const terbit = terbitkanKeyUntukPesanan(order);
+      db.prepare(`UPDATE orders SET api_key_issued = ? WHERE id = ?`).run(terbit.apiKey, order.id);
+      order.api_key_issued = terbit.apiKey;
+      masaAktifBaru = terbit.expiresAt;
       catatan = "key baru diterbitkan";
       selesai = true;
-      pesanan.catatEvent(order.id, "fulfillment", "sistem", `API Key baru diterbitkan: ${apiKey.slice(0, 14)}… (${order.quota_tokens.toLocaleString("id-ID")} token)`);
-    } else {
-      const ok = tambahKuotaUntukPesanan(order);
-      catatan = ok ? `kuota +${order.quota_tokens} token ditambahkan` : `key target tidak ditemukan saat fulfillment`;
-      selesai = ok;
       pesanan.catatEvent(
         order.id,
-        ok ? "fulfillment" : "info",
+        "fulfillment",
         "sistem",
-        ok
-          ? `Kuota +${order.quota_tokens.toLocaleString("id-ID")} token ditambahkan ke ${order.target_api_key.slice(0, 18)}…`
+        `API Key baru diterbitkan: ${terbit.apiKey.slice(0, 14)}… (${order.quota_tokens.toLocaleString("id-ID")} token, masa aktif ${masaAktif.MASA_AKTIF_HARI} hari s.d. ${masaAktif.formatWaktuIndo(terbit.expiresAt)})`
+      );
+    } else {
+      const masaBaru = tambahKuotaUntukPesanan(order);
+      catatan = masaBaru
+        ? `kuota +${order.quota_tokens} token ditambahkan, masa aktif diperpanjang s.d. ${masaAktif.formatWaktuIndo(masaBaru)}`
+        : `key target tidak ditemukan saat fulfillment`;
+      selesai = !!masaBaru;
+      masaAktifBaru = masaBaru || "";
+      pesanan.catatEvent(
+        order.id,
+        masaBaru ? "fulfillment" : "info",
+        "sistem",
+        masaBaru
+          ? `Kuota +${order.quota_tokens.toLocaleString("id-ID")} token ditambahkan ke ${order.target_api_key.slice(0, 18)}… — masa aktif diperpanjang s.d. ${masaAktif.formatWaktuIndo(masaBaru)}`
           : `GAGAL: key target ${order.target_api_key} tidak ditemukan di database — perlu tindakan admin.`
       );
     }
@@ -200,7 +221,7 @@ function prosesPesananLunas(order, opts = {}) {
     pesan: selesai
       ? order.mode === "key_baru"
         ? "Key baru berhasil diterbitkan & dikirim ke pembeli."
-        : `Kuota ${order.quota_tokens.toLocaleString("id-ID")} token berhasil ditambahkan.`
+        : `Kuota ${order.quota_tokens.toLocaleString("id-ID")} token berhasil ditambahkan — masa aktif diperpanjang ${masaAktif.MASA_AKTIF_HARI} hari s.d. ${masaAktif.formatWaktuIndo(masaAktifBaru)}.`
       : "Fulfillment gagal — perlu tindakan admin (key target tidak ditemukan).",
   };
 }

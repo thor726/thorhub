@@ -57,10 +57,36 @@ function tautanToko() {
   return { base, api: `${base}/v1`, portal: `${base}/portal` };
 }
 
+/**
+ * Baca masa aktif TERBARU key terkait pesanan (diterbitkan / ditop-up)
+ * langsung dari DB — selalu akurat walau pesanan diproses lama lalu
+ * dikirim ulang oleh admin.
+ * @returns {string} mis. "3 Des 2026, 14.05 WIB", atau "" bila tidak ketemu
+ */
+function masaAktifOrder(order) {
+  try {
+    const db = require("../db");
+    const ma = require("./masa-aktif");
+    const apiKey = order && order.mode === "key_baru" ? order.api_key_issued : order && order.target_api_key;
+    if (!apiKey) return "";
+    const exp = ma.expiryKeyDariDb(apiKey);
+    return exp ? ma.formatWaktuIndo(exp) : "";
+  } catch {
+    return "";
+  }
+}
+
 /** Susun HTML struk email (memuat API KEY — diminta pemilik toko). */
 function buildEmailHtml(order) {
   const t = tautanToko();
   const isNew = order.mode === "key_baru";
+  const masa = masaAktifOrder(order);
+  const barisMasa = masa
+    ? `<tr>
+        <td style="padding:10px 12px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;">Masa Aktif</td>
+        <td style="padding:10px 12px;border-top:1px solid #e5e7eb;font-size:13px;color:#111827;text-align:right;">${esc(masa)}</td>
+      </tr>`
+    : "";
   const barisKey = isNew
     ? `<tr>
         <td style="padding:10px 12px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;">API Key Anda</td>
@@ -104,6 +130,7 @@ function buildEmailHtml(order) {
             <td style="padding:10px 12px;border-top:1px solid #e5e7eb;font-size:13px;color:#111827;text-align:right;">${esc(order.payment_method)}</td>
           </tr>
           ${barisKey}
+          ${barisMasa}
         </table>
         <p style="margin:0 0 18px;font-size:15px;font-weight:bold;color:#111827;text-align:right;">Total Dibayar: <span style="color:#d97706;">${rupiah(order.amount_to_pay)}</span></p>
         <div style="margin:0 0 18px;padding:16px;border:1px dashed #a3e635;border-radius:12px;background:#f7fee7;">
@@ -112,9 +139,11 @@ function buildEmailHtml(order) {
               ? `Aktifkan key Anda:<br>
                 • API Base URL: <code style="background:#ecfccb;padding:2px 6px;border-radius:6px;">${esc(t.api)}</code><br>
                 • Dashboard member: <a href="${esc(t.portal)}" style="color:#3f6212;font-weight:bold;">${esc(t.portal)}</a> — masuk dengan API Key di atas<br>
-                • Cara pakai: header <b>Authorization: Bearer &lt;key&gt;</b> ke Base URL di atas.`
+                • Cara pakai: header <b>Authorization: Bearer &lt;key&gt;</b> ke Base URL di atas.<br>
+                • Masa aktif ${esc(masa || "25 hari")} — top-up kapan saja untuk menambah kuota + memperpanjang 25 hari.`
               : `Cek kuota terbaru kapan saja di dashboard member:<br>
-                <a href="${esc(t.portal)}" style="color:#3f6212;font-weight:bold;">${esc(t.portal)}</a>.`}
+                <a href="${esc(t.portal)}" style="color:#3f6212;font-weight:bold;">${esc(t.portal)}</a>.<br>
+                ${masa ? `Masa aktif key diperpanjang s.d. <b>${esc(masa)}</b>.` : ""}`}
             <br><b>Jaga kerahasiaan key Anda</b> — siapa pun yang memegang key memakai kuota Anda.
           </p>
         </div>
@@ -149,9 +178,10 @@ async function sendEmail(apiKey, from, to, subject, html) {
   }
 }
 
-/** Susun pesan WhatsApp untuk pembeli (termasuk Base URL & dashboard member). */
+/** Susun pesan WhatsApp untuk pembeli (termasuk Base URL, dashboard, masa aktif). */
 function pesanWaPembeli(order) {
   const t = tautanToko();
+  const masa = masaAktifOrder(order);
   if (order.mode === "key_baru") {
     return [
       `✅ *Pembayaran diterima — ThorHub*`,
@@ -162,6 +192,7 @@ function pesanWaPembeli(order) {
       `\`${order.api_key_issued}\``,
       ``,
       `• Kuota: ${order.quota_tokens.toLocaleString("id-ID")} token`,
+      `• Masa aktif: 25 hari${masa ? ` — s.d. ${masa}` : ""} (top-up memperpanjang)`,
       `• *Base URL:* \`${t.api}\``,
       `• *Dashboard member:* ${t.portal}`,
       `• Cara pakai: kirim request ke Base URL di atas dengan header \`Authorization: Bearer <key>\``,
@@ -177,6 +208,7 @@ function pesanWaPembeli(order) {
     `• Key: \`${order.target_api_key.slice(0, 18)}…\``,
     `• Tambahan: +${order.quota_tokens.toLocaleString("id-ID")} token`,
     `• Total dibayar: ${rupiah(order.amount_to_pay)}`,
+    masa ? `• Masa aktif diperpanjang s.d. *${masa}*` : `• Masa aktif diperpanjang 25 hari`,
     ``,
     `• *Base URL:* \`${t.api}\``,
     `• *Dashboard member:* ${t.portal}`,
@@ -252,4 +284,4 @@ async function notifyAdminNewOrder(order) {
   return sendWhatsApp(cfg.fonnteToken, cfg.adminWa, teks);
 }
 
-module.exports = { sendWhatsApp, sendEmail, kirimNotifikasiLunas, notifyAdminNewOrder, pesanWaPembeli, buildEmailHtml, rupiah, tautanToko };
+module.exports = { sendWhatsApp, sendEmail, kirimNotifikasiLunas, notifyAdminNewOrder, pesanWaPembeli, buildEmailHtml, rupiah, tautanToko, masaAktifOrder };
