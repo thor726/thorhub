@@ -58,6 +58,15 @@
   </header>
 
   <main class="wrap narrow-beli">
+    <!-- Breadcrumb ala Thor-market: jejak klik dengan pemisah "/".
+         Segmen terakhir ikut tahap pembelian (diubah beli.js lewat setStepper). -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/">Beranda</a>
+      <span class="bc-sep" aria-hidden="true">/</span>
+      <a href="/beli">Beli Token</a>
+      <span class="bc-sep" aria-hidden="true">/</span>
+      <span class="bc-now" id="bc-beli" aria-current="page">Checkout</span>
+    </nav>
     <!-- Stepper alur belanja ala marketplace (referensi Thor-market):
          1 Checkout → 2 Pembayaran → 3 Selesai. Nomor/label diubah beli.js. -->
     <ol class="stepper" id="stepper" aria-label="Langkah pembelian">

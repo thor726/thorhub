@@ -66,6 +66,15 @@
   </header>
 
   <main class="wrap">
+    <!-- Breadcrumb ala Thor-market: jejak klik dengan pemisah "/".
+         Segmen terakhir diubah portal.js: "Masuk" saat login, lalu ikut tab aktif. -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/">Beranda</a>
+      <span class="bc-sep" aria-hidden="true">/</span>
+      <a href="/portal">Portal Member</a>
+      <span class="bc-sep" aria-hidden="true">/</span>
+      <span class="bc-now" id="bc-tab" aria-current="page">Masuk</span>
+    </nav>
     <!-- Skeleton pemuatan awal -->
     <div id="loading" class="card">
       <div class="skeleton skeleton-grid mb-4">

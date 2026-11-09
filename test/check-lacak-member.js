@@ -69,7 +69,7 @@ async function main() {
   const kodePending = "THX-TESTP" + crypto.randomBytes(3).toString("hex").toUpperCase();
   const kodeSelesai = "THX-TESTS" + crypto.randomBytes(3).toString("hex").toUpperCase();
   const kodeOrangLain = "THX-TESTX" + crypto.randomBytes(3).toString("hex").toUpperCase();
-  // Untuk uji linkage keluarga key (bagian [9]):
+  // Untuk uji pemisahan by key (bagian [9]):
   const keyRoot = "sk-thor-" + crypto.randomBytes(24).toString("hex");
   const keyAnak = "sk-thor-" + crypto.randomBytes(24).toString("hex");
   const kodeAnak = "THX-TESTK" + crypto.randomBytes(3).toString("hex").toUpperCase();
@@ -177,20 +177,23 @@ async function main() {
     const css = await fetch(BASE + "/style.css").then((r) => r.text());
     cek("CSS stepper & order-card ada", css.includes(".trk-step") && css.includes(".order-card"));
 
-    // ---------- Regresi: linkage keluarga key (pesanan key baru) ----------
-    // Simulasi keluhan "baru beli key, lacak pesanan belum ada":
-    // member login dengan key A membeli KEY BARU → pesanan di-stamp
-    // owner_api_key = A → harus langsung terlihat di pelacakan A (PENDING),
-    // dan setelah lunas juga terlihat dari key B penerbitnya (keluarga).
-    console.log("[9] Linkage keluarga key (order key_baru dari sesi member)");
-    db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit) VALUES (?, ?, ?)").run(keyRoot, "uji-keluarga", 1000);
-    infoAnak = masuk.run(kodeAnak, "tok-uji", "key_baru", "10m", 10_000_000, "uji-keluarga", "uji-keluarga@uji.test", "", "", "", 8_000, 111, 8_111, "QRIS DANA", "PENDING", expBsk);
-    infoRootTopup = masuk.run(kodeRootTopup, "tok-uji", "topup", "10m", 10_000_000, "uji-keluarga", "uji-keluarga@uji.test", "", keyRoot, "", 8_000, 222, 8_222, "QRIS DANA", "PENDING", expBsk);
+    // ---------- Regresi: pemisahan riwayat BY KEY (bukan nama) ----------
+    // Keluhan asli: "riwayat pas cek nama yang sama muncul semua — numpuk
+    // sama pesanan orang lain". Sekarang riwayat HANYA pesanan milik key
+    // yang login (owner / target / issued). Pesanan key lain TIDAK ikut,
+    // sekalipun nama/email/WA-nya identik.
+    console.log("[9] Pemisahan by key: nama sama ≠ pesanan sama");
+    const namaSama = memberKey.user_name; // nama PERSIS sama dgn member utama
+    db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit) VALUES (?, ?, ?)").run(keyRoot, namaSama, 1000);
+    // keyRoot: NAMA SAMA + EMAIL/WA SAMA dgn member utama, tapi key BEDA.
+    infoAnak = masuk.run(kodeAnak, "tok-uji", "key_baru", "10m", 10_000_000, namaSama, "uji-keluarga@uji.test", "081234567890", "", "", 8_000, 111, 8_111, "QRIS DANA", "PENDING", expBsk);
+    infoRootTopup = masuk.run(kodeRootTopup, "tok-uji", "topup", "10m", 10_000_000, namaSama, "uji-keluarga@uji.test", "081234567890", keyRoot, "", 8_000, 222, 8_222, "QRIS DANA", "PENDING", expBsk);
     // Stamp owner (ala POST /store/orders saat sesi portal aktif):
     db.prepare("UPDATE orders SET owner_api_key = ? WHERE order_code IN (?, ?)").run(keyRoot, kodeAnak, kodeRootTopup);
-    pesananLib.catatEvent(infoAnak.lastInsertRowid, "dibuat", "pembeli", "Pesanan uji keluarga dibuat.");
+    pesananLib.catatEvent(infoAnak.lastInsertRowid, "dibuat", "pembeli", "Pesanan uji by-key dibuat.");
 
-    // Login sebagai KEY ROOT — pesanan PENDING-nya sendiri harus terlihat.
+    // Login sebagai KEY ROOT (nama sama dgn member utama): hanya pesanan
+    // milik keyRoot yang muncul — pesanan member utama TIDAK bocor.
     const loginRoot = await panggil("POST", "/portal/member/login", { api_key: keyRoot });
     cek("login key root 200", loginRoot.status === 200);
     const kopiAwal = KOPI;
@@ -198,19 +201,21 @@ async function main() {
     const daftarRoot = await panggil("GET", "/portal/member/orders");
     cek("PENDING key_baru terlihat dari key root (owner linkage)", (daftarRoot.json.data.orders || []).some((o) => o.order_code === kodeAnak));
     cek("topup key root terlihat dari key root", (daftarRoot.json.data.orders || []).some((o) => o.order_code === kodeRootTopup));
+    cek("pesanan member utama TIDAK bocor ke key lain walau nama sama", !(daftarRoot.json.data.orders || []).some((o) => o.order_code === kodePending || o.order_code === kodeSelesai));
+    cek("stats total key root = miliknya saja (2)", daftarRoot.json.data.stats && daftarRoot.json.data.stats.total === 2);
 
     // Lunaskan order key_baru → terbitkan key anak (ala prosesPesananLunas).
     db.prepare("UPDATE orders SET status = 'COMPLETED', paid_at = datetime('now','localtime'), completed_at = datetime('now','localtime'), api_key_issued = ? WHERE order_code = ?").run(keyAnak, kodeAnak);
-    db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit) VALUES (?, ?, ?)").run(keyAnak, "uji-keluarga", 10_000_000);
+    db.prepare("INSERT INTO api_keys (api_key, user_name, token_limit) VALUES (?, ?, ?)").run(keyAnak, namaSama, 10_000_000);
 
-    // Login dengan KEY ANAK → keluarga key: melihat pesanan penerbitnya +
-    // pesanan keluarga (owner key root ikut lewat lineage/identitas).
+    // Login dengan KEY ANAK: melihat pesanan yang MENERBITKANNYA saja —
+    // bukan lagi seluruh pesanan keluarga/identitas (perilaku lama dihapus).
     const loginAnak = await panggil("POST", "/portal/member/login", { api_key: keyAnak });
     cek("login dengan key anak 200", loginAnak.status === 200);
     KOPI = (loginAnak.setCookie || "").split(";")[0];
     const daftarAnak = await panggil("GET", "/portal/member/orders");
     cek("key anak melihat pesanan penerbitnya", (daftarAnak.json.data.orders || []).some((o) => o.order_code === kodeAnak));
-    cek("key anak melihat pesanan key root (keluarga)", (daftarAnak.json.data.orders || []).some((o) => o.order_code === kodeRootTopup));
+    cek("key anak TIDAK melihat pesanan lain key root (tanpa perluasan keluarga)", !(daftarAnak.json.data.orders || []).some((o) => o.order_code === kodeRootTopup));
     const detAnak = await panggil("GET", "/portal/member/orders/" + kodeAnak);
     cek("detail dari key anak 200", detAnak.status === 200);
 

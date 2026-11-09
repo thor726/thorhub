@@ -52,8 +52,29 @@ function showLogin() {
   $("login-section").classList.remove("hidden");
   $("btn-logout").classList.add("hidden");
   $("btn-refresh").classList.add("hidden");
+  setBreadcrumbSegmen("Masuk");
   const f = $("apikey");
   if (f) f.focus();
+}
+
+/* ============ Breadcrumb ala Thor-market (pemisah "/") ============
+   Jejak klik di dashboard: Beranda / Portal Member / <tab kini>.
+   Segmen terakhir berubah SETIAP kali tab diklik / status login berubah. */
+const LABEL_TAB_BC = {
+  integrasi: "Integrasi API",
+  topup: "Top Up",
+  pesanan: "Pesanan Saya",
+  pemakaian: "Pemakaian",
+  model: "Model",
+  log: "Log Aktivitas",
+};
+function setBreadcrumbSegmen(teks) {
+  const el = $("bc-tab");
+  if (el) el.textContent = teks;
+}
+function breadcrumbTabAktif() {
+  const aktif = document.querySelector(".tab.active");
+  setBreadcrumbSegmen(aktif ? LABEL_TAB_BC[aktif.dataset.tab] || "Dashboard" : "Dashboard");
 }
 
 /** Muat data akun + pemakaian, lalu render seluruh dashboard. */
@@ -73,6 +94,7 @@ async function boot() {
   $("panel").classList.remove("hidden");
   $("btn-logout").classList.remove("hidden");
   $("btn-refresh").classList.remove("hidden");
+  breadcrumbTabAktif();
 
   // Jadwalkan auto-logout saat sesi 2 jam habis (expires_at dari server).
   jadwalkanAutoLogout(d.expires_at);
@@ -465,6 +487,8 @@ document.querySelectorAll(".tab").forEach((btn) => {
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
     $("tab-" + btn.dataset.tab).classList.add("active");
+    // Breadcrumb ikut klik: Beranda / Portal Member / <tab yang diklik>
+    setBreadcrumbSegmen(LABEL_TAB_BC[btn.dataset.tab] || "Dashboard");
     // Buka tab Pesanan Saya → daftar selalu segar saat dilihat
     if (btn.dataset.tab === "pesanan") muatPesanan();
   });
@@ -551,6 +575,8 @@ const KUNCI_TOPUP = "thorhub_topup_portal";
 function aktifkanTab(nama) {
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === nama));
   document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + nama));
+  // Breadcrumb ikut (setiap klik — termasuk klik tombol 'Lihat Kredensial' dkk.)
+  setBreadcrumbSegmen(LABEL_TAB_BC[nama] || "Dashboard");
 }
 
 /** Buka tab Top Up dari tombol mana pun (kartu kuota / banner peringatan). */

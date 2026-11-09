@@ -66,7 +66,9 @@ for (const { html, js } of pairs) {
 
   const hilang = [...idsJs].filter((id) => !idsHtml.has(id));
   // id yang dibuat dinamis saat runtime (hasil render) dikecualikan
-  const dinamis = ["copy-new", "st-status", "st-queue", "st-running", "btn-create", "btn-login", "btn-refresh", "btn-reveal", "btn-copy", "btn-logout", "form-login", "form-create", "keys-wrap", "create-result", "login-msg", "panel", "loading", "login-section", "stats", "gw-status", "cards", "status-warn", "uname", "mykey", "curl-example", "py-example", "apikey", "password", "search", "models-wrap", "models-meta", "new-name", "new-limit", "notif-box", "modal-order-msg", "btn-topup-ulang", "btn-topup-ulang2", "btn-topup-lagi"];
+  // (trk-* & btn-pesanan-topup = modal pelacakan/kartu pesanan yang dirender
+  //  portal.js lewat innerHTML saat tombol Lacak/Bayar diklik)
+  const dinamis = ["copy-new", "st-status", "st-queue", "st-running", "btn-create", "btn-login", "btn-refresh", "btn-reveal", "btn-copy", "btn-logout", "form-login", "form-create", "keys-wrap", "create-result", "login-msg", "panel", "loading", "login-section", "stats", "gw-status", "cards", "status-warn", "uname", "mykey", "curl-example", "py-example", "apikey", "password", "search", "models-wrap", "models-meta", "new-name", "new-limit", "notif-box", "modal-order-msg", "btn-topup-ulang", "btn-topup-ulang2", "btn-topup-lagi", "btn-pesanan-topup", "trk-bayar", "trk-batal", "trk-refresh", "trk-ulang", "trk-qr-wrap", "trk-countdown"];
   const benarBenarHilang = hilang.filter((id) => !dinamis.includes(id));
   if (benarBenarHilang.length) {
     console.log(`  ✗ ${js} → ${html}: id tidak ditemukan: ${benarBenarHilang.join(", ")}`);

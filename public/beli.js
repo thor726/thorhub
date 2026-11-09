@@ -34,6 +34,8 @@ let API_BASE = "https://llm.thormarket.site/v1";
 let PORTAL_URL = "https://llm.thormarket.site/portal";
 
 /* ================= Stepper (1 Checkout → 2 Pembayaran → 3 Selesai) ================= */
+const LABEL_TAHAP = { 1: "Checkout", 2: "Pembayaran", 3: "Selesai" };
+
 function setStepper(n) {
   document.querySelectorAll("#stepper .st").forEach((li) => {
     const i = Number(li.dataset.st);
@@ -45,6 +47,9 @@ function setStepper(n) {
     else li.removeAttribute("aria-current");
     $("st-no-" + i).innerHTML = done ? "✓" : String(i);
   });
+  // Breadcrumb mengikuti tahap: Beranda / Beli Token / <tahap kini>
+  const bc = $("bc-beli");
+  if (bc) bc.textContent = LABEL_TAHAP[n] || "Checkout";
 }
 
 /* Selisih jam dipakai HANYA bila wajar (±10 menit) — server janggal tidak

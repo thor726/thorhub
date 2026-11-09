@@ -48,6 +48,24 @@ async function api(path, opts = {}) {
   return d.data;
 }
 
+/* ============ Breadcrumb ala Thor-market (pemisah "/") ============
+   Jejak klik di panel: Beranda / Panel Admin / <tab kini>. Segmen
+   terakhir berubah SETIAP kali tab diklik / status login berubah. */
+const LABEL_ATAB_BC = {
+  kelola: "Kelola Key",
+  aktivitas: "Aktivitas",
+  model: "Model",
+  toko: "Toko & Pesanan",
+};
+function setBreadcrumbSegmen(teks) {
+  const el = document.getElementById("bc-atab");
+  if (el) el.textContent = teks;
+}
+function breadcrumbTabAktif() {
+  const aktif = document.querySelector("[data-atab].active");
+  setBreadcrumbSegmen(aktif ? LABEL_ATAB_BC[aktif.dataset.atab] || "Kelola Key" : "Kelola Key");
+}
+
 function showLogin() {
   loggedIn = false;
   if (sessionTimer) { clearTimeout(sessionTimer); sessionTimer = null; }
@@ -55,6 +73,7 @@ function showLogin() {
   $("panel").classList.add("hidden");
   $("login-section").classList.remove("hidden");
   $("btn-logout").classList.add("hidden");
+  setBreadcrumbSegmen("Masuk");
   $("password").focus();
 }
 
@@ -64,6 +83,7 @@ function showPanel() {
   $("login-section").classList.add("hidden");
   $("panel").classList.remove("hidden");
   $("btn-logout").classList.remove("hidden");
+  breadcrumbTabAktif();
 }
 
 function toast(el, msg, ok = true) {
@@ -529,6 +549,8 @@ document.querySelectorAll("[data-atab]").forEach((btn) => {
     btn.classList.add("active");
     const panel = $("atab-" + btn.dataset.atab);
     if (panel) panel.classList.add("active");
+    // Breadcrumb ikut klik: Beranda / Panel Admin / <tab yang diklik>
+    setBreadcrumbSegmen(LABEL_ATAB_BC[btn.dataset.atab] || "Kelola Key");
   });
 });
 

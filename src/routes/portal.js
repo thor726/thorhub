@@ -715,68 +715,33 @@ router.get("/member/me", requireMemberSession, (req, res) => {
 
 // ---------------------------------------------------------------
 // MEMBER — PELACAKAN PESANAN (ala e-commerce besar)
-// Member melihat HANYA pesanan miliknya: top-up ke key-nya sendiri,
-// pesanan key_baru yang menerbitkan key-nya, ATAU pesanan yang ia
-// buat saat sesi portal aktif (owner_api_key) — termasuk seluruh
-// "keluarga key" (lineage): key lama → beli key baru → key itu
-// beli lagi, dst. Semua endpoint memakai sesi cookie member —
-// tidak ada access_token yang perlu disimpan, tidak ada data
-// member lain yang bocor.
+// Member melihat HANYA pesanan milik KEY yang dipakai login —
+// TIDAK ada pencocokan nama/email/WA. Dulu riwayat menyatukan
+// pesanan dari identitas pembeli yang sama; akibatnya pesanan
+// orang lain ikut menumpuk bila nama/email/WA kebetulan identik.
+// Sekarang pemisahan tegas "by key saja":
+//   • owner_api_key    — key login yang membuat pesanan;
+//   • target_api_key   — key login yang di-top-up;
+//   • api_key_issued   — key baru yang LAHIR dari pesanan key_baru
+//                        (agar key baru tetap melihat pesanan yang
+//                        menerbitkannya).
+// Semua endpoint memakai sesi cookie member — tidak ada
+// access_token yang perlu disimpan, tidak ada data member lain
+// yang bocor.
 // ---------------------------------------------------------------
 
 /**
- * Hitung "keluarga key" (lineage) milik sebuah key — ala akun belanja
- * e-commerce: semua key yang terhubung lewat riwayat pesanan dianggap
- * satu akun, sehingga SEMUA pesanan keluarga tampil di pelacakan
- * berapa pun key yang dipakai login.
- *
- * Perluasan:
- *   1. Linkage langsung — target_api_key, api_key_issued, owner_api_key.
- *   2. Identitas pembeli — email/WA yang dipakai pada pesanan keluarga;
- *      pesanan lain dengan email/WA identik ikut (pembeli yang sama).
- * Iterasi sampai titik-titik (fixed point) — tabel orders kecil, aman.
+ * Klausa SQL + argumen "pesanan milik key ini saja" (by key, BUKAN nama).
+ * Dipakai bersama oleh daftar pesanan, statistik chip, dan detail.
  *
  * @param {string} apiKey  key sesi member
- * @returns {string[]} daftar key keluarga (selalu memuat apiKey itu sendiri)
  */
-function keluargaKey(apiKey) {
-  const kel = new Set([apiKey]);
-  const identitas = new Set(); // email & WA terbukti milik keluarga ini
-  for (let i = 0; i < 20; i++) {
-    const keys = [...kel];
-    const tanda = keys.map(() => "?").join(",");
-    const baris = db
-      .prepare(
-        `SELECT target_api_key, api_key_issued, owner_api_key, email, whatsapp
-         FROM orders
-         WHERE target_api_key IN (${tanda})
-            OR api_key_issued IN (${tanda})
-            OR owner_api_key IN (${tanda})
-            OR (email != '' AND email IN (SELECT value FROM json_each(?)))
-            OR (whatsapp != '' AND whatsapp IN (SELECT value FROM json_each(?)))`
-      )
-      .all(...keys, ...keys, ...keys, JSON.stringify([...identitas]), JSON.stringify([...identitas]));
-
-    let bertambah = false;
-    for (const o of baris) {
-      for (const k of [o.target_api_key, o.api_key_issued, o.owner_api_key]) {
-        if (k && !kel.has(k)) {
-          kel.add(k);
-          bertambah = true;
-        }
-      }
-      if (o.email && !identitas.has(o.email)) {
-        identitas.add(o.email);
-        bertambah = true;
-      }
-      if (o.whatsapp && !identitas.has(o.whatsapp)) {
-        identitas.add(o.whatsapp);
-        bertambah = true;
-      }
-    }
-    if (!bertambah) break;
-  }
-  return [...kel];
+function klausaMilikKey(apiKey) {
+  return {
+    klausa:
+      "(owner_api_key = ? OR target_api_key = ? OR (mode = 'key_baru' AND api_key_issued = ?))",
+    args: [apiKey, apiKey, apiKey],
+  };
 }
 
 /** Label paket yang ramah ("20 Juta") dari package_id ("20m"). */
@@ -923,16 +888,16 @@ async function payloadDetailMember(order, apiKey) {
   };
 }
 
-/** Cari pesanan milik member by kode; 404-generik bila bukan miliknya. */
+/** Cari pesanan milik member by kode; 404-generik bila bukan miliknya.
+ *  Milik = by key langsung (owner / target / issued) — lihat klausaMilikKey. */
 function pesananMemberAtau404(req, res, apiKey) {
   const code = String(req.params.code || "").trim().toUpperCase();
   const order = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(code);
-  const kel = keluargaKey(apiKey);
   const milik =
     !!order &&
-    (kel.includes(order.owner_api_key) ||
-      kel.includes(order.target_api_key) ||
-      (order.mode === "key_baru" && kel.includes(order.api_key_issued)));
+    (order.owner_api_key === apiKey ||
+      order.target_api_key === apiKey ||
+      (order.mode === "key_baru" && order.api_key_issued === apiKey));
   if (!order || !milik) {
     res.status(404).json({ error: { message: "Pesanan tidak ditemukan.", code: "not_found" } });
     return null;
@@ -958,17 +923,11 @@ router.get("/member/orders", requireMemberSession, (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
   const offset = Math.max(0, Number(req.query.offset) || 0);
 
-  // Keluarga key member (lineage) — semua pesanan keluarga tampil, seperti
-  // riwayat akun di e-commerce: berapa pun key yang dipakai login.
-  const kel = keluargaKey(row.api_key);
-  const tanda = kel.map(() => "?").join(",");
-  const milik = `(
-    owner_api_key IN (${tanda})
-    OR target_api_key IN (${tanda})
-    OR (mode = 'key_baru' AND api_key_issued IN (${tanda}))
-  )`;
-  const where = [milik];
-  const args = [...kel, ...kel, ...kel];
+  // Milik by key SAJA (bukan nama/email/WA) — pesanan orang lain yang
+  // kebetulan identitasnya sama TIDAK ikut muncul di riwayat ini.
+  const milik = klausaMilikKey(row.api_key);
+  const where = [milik.klausa];
+  const args = [...milik.args];
   if (STATUS_VALID.has(status)) {
     where.push("status = ?");
     args.push(status);
@@ -992,8 +951,8 @@ router.get("/member/orders", requireMemberSession, (req, res) => {
 
   // Statistik milik member ini (tidak terpengaruh filter) — untuk chip.
   const perStatus = db
-    .prepare(`SELECT status, COUNT(*) AS n FROM orders WHERE ${milik} GROUP BY status`)
-    .all(...kel, ...kel, ...kel)
+    .prepare(`SELECT status, COUNT(*) AS n FROM orders WHERE ${milik.klausa} GROUP BY status`)
+    .all(...milik.args)
     .reduce((acc, r) => ((acc[r.status] = r.n), acc), {});
   const totalSemua = Object.values(perStatus).reduce((a, b) => a + b, 0);
 
