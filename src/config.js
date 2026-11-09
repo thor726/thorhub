@@ -21,6 +21,9 @@ const config = {
   // Default TRUE (aman): memaksa include_usage pada stream agar token tidak
   // luput dihitung. Set "false" hanya bila provider menolak stream_options.
   injectStreamUsage: String(process.env.INJECT_STREAM_USAGE ?? "true").toLowerCase() !== "false",
+  // URL publik toko (opsional) — dipakai untuk tautan di WA/email notifikasi,
+  // mis. "https://llm.thormarket.site". Tanpa ini tautan memakai path relatif.
+  publicBaseUrl: (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, ""),
 };
 
 if (!config.masterApiKey) {

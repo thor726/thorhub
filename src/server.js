@@ -11,6 +11,7 @@ const limiter = require("./services/limiter");
 const chatRoutes = require("./routes/chat");
 const adminRoutes = require("./routes/admin");
 const portalRoutes = require("./routes/portal");
+const storeRoutes = require("./routes/store");
 
 const app = express();
 app.disable("x-powered-by");
@@ -109,6 +110,10 @@ app.get("/portal", (_req, res) => {
 app.get("/docs", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "docs.html"));
 });
+// Halaman toko pembelian (publik — QRIS DANA otomatis)
+app.get("/beli", (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "beli.html"));
+});
 
 // Log ringkas setiap request
 app.use((req, _res, next) => {
@@ -128,6 +133,8 @@ app.get("/api/info", (_req, res) => {
       admin: "GET/PATCH/DELETE /admin/keys  (Auth: Bearer ADMIN_API_KEY)",
       panelAdmin: "GET /admin (web UI)",
       portalMember: "GET /portal (web UI)",
+      toko: "GET /beli (beli kuota / top-up, QRIS DANA otomatis)",
+      webhookDana: "POST /store/webhook/dana (MacroDroid)",
     },
   });
 });
@@ -150,9 +157,12 @@ app.use("/admin", adminRoutes);
 // Route website (login/logout sesi panel & portal)
 app.use("/portal", portalRoutes);
 
-// 404 — JSON untuk /api|/v1|/admin, halaman HTML untuk sisanya
+// Route toko pembelian otomatis (QRIS DANA) — endpoint publik untuk pembeli
+app.use("/store", storeRoutes.router);
+
+// 404 — JSON untuk /api|/v1|/admin|/portal|/store, halaman HTML untuk sisanya
 app.use((req, res) => {
-  const isApi = /^\/(api|v1|admin|portal)\b/.test(req.path);
+  const isApi = /^\/(api|v1|admin|portal|store)\b/.test(req.path);
   if (isApi) {
     return res.status(404).json({ error: { message: "Endpoint tidak ditemukan.", type: "not_found" } });
   }

@@ -1,7 +1,7 @@
 {
   "name": "llm-proxy-gateway",
   "version": "1.0.0",
-  "description": "API Proxy Gateway untuk menjual kembali akses LLM API dengan sistem Sub-API Key, kuota token, dan antrean rate-limit (Bottleneck).",
+  "description": "API Proxy Gateway untuk menjual kembali akses LLM API dengan sistem Sub-API Key, kuota token, toko pembelian otomatis (QRIS DANA), dan tanpa rate-limit.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -24,6 +24,10 @@
   "dependencies": {
     "better-sqlite3": "^11.10.0",
     "dotenv": "^16.6.1",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4"
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true
   }
 }

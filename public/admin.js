@@ -186,6 +186,8 @@ async function loadAll() {
     loadKeys().catch(() => {}),
     loadActivity().catch(() => {}),
     loadModels().catch(() => {}),
+    loadStore().catch(() => {}),
+    loadOrders().catch(() => {}),
   ]);
 }
 
@@ -531,6 +533,197 @@ $("filter-model").addEventListener("input", (e) => {
     )
   );
 });
+
+// ================================================================
+// TAB TOKO & PESANAN (QRIS DANA otomatis)
+// ================================================================
+const rupiahIDR = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
+let STORE_CFG = null; // konfigurasi toko terakhir dari server
+
+/** Muat & render konfigurasi toko (QRIS + notifikasi + webhook). */
+async function loadStore() {
+  const d = await api("/store");
+  STORE_CFG = d;
+  $("toko-qris").value = d.qris.static || "";
+  $("toko-enabled").checked = !!d.qris.enabled;
+  $("toko-secret").textContent = d.qris.secret || "(belum ada — klik Buat Secret Baru)";
+  $("toko-webhook-url").textContent = location.origin + d.webhook_path;
+  $("toko-macrodroid").textContent =
+    '{"secret_token":"' + (d.qris.secret || "…") + '","text":"[notif_text]"}';
+  // Info merchant dari string QRIS terakhir (server tak menyimpan namanya;
+  // validasi ulang lokal hanya bila ada isi).
+  $("toko-qris-merchant").textContent = d.qris.static
+    ? "QRIS tersimpan (" + d.qris.static.length + " karakter)."
+    : "Belum ada QRIS — toko belum bisa menerima pembayaran.";
+  $("nt-fonnte").value = d.notify.fonnteToken || "";
+  $("nt-adminwa").value = d.notify.adminWa || "";
+  $("nt-resend").value = d.notify.resendKey || "";
+  $("nt-emailfrom").value = d.notify.emailFrom || "";
+  $("nt-wa-pembeli").checked = d.notify.waKePembeli !== false;
+  $("nt-email-pembeli").checked = d.notify.emailKePembeli !== false;
+}
+
+/** Simpan pengaturan QRIS (string + aktif/nonaktif). */
+$("btn-toko-qris").addEventListener("click", async () => {
+  const box = $("toko-qris-msg");
+  box.innerHTML = "";
+  try {
+    const r = await api("/store/qris", {
+      method: "POST",
+      body: JSON.stringify({ static: $("toko-qris").value.trim(), enabled: $("toko-enabled").checked }),
+    });
+    box.innerHTML = `<div class="alert ok">${esc(r.message)}${r.merchant ? " Merchant: <b>" + esc(r.merchant.name || "—") + "</b>" : ""}</div>`;
+    setTimeout(() => (box.innerHTML = ""), 8000);
+    await loadStore();
+  } catch (err) {
+    if (err.message !== "unauthorized") box.innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
+  }
+});
+
+/** (Re)generate secret webhook. */
+$("btn-toko-secret").addEventListener("click", async () => {
+  const ya = await tanya({
+    judul: "Buat Secret Baru",
+    pesan: "Secret lama TIDAK berlaku lagi — MacroDroid di HP Anda harus diperbarui dengan body baru. Lanjutkan?",
+    ok: "Ya, Buat Baru",
+  });
+  if (!ya) return;
+  try {
+    const r = await api("/store/secret", { method: "POST", body: JSON.stringify({}) });
+    await loadStore();
+    notif(r.message);
+  } catch (err) {
+    if (err.message !== "unauthorized") notif(err.message, false);
+  }
+});
+
+/** Uji webhook (server-side self-test, tidak melunaskan pesanan). */
+$("btn-toko-test").addEventListener("click", async () => {
+  const box = $("toko-secret-msg");
+  box.innerHTML = '<div class="loading-box"><span class="spinner sm"></span> menguji webhook…</div>';
+  try {
+    const r = await api("/store/test", { method: "POST", body: JSON.stringify({}) });
+    box.innerHTML = `<div class="alert ${r.ok ? "ok" : "warn"}">${esc(r.hasil?.message || "Selesai.")}</div>`;
+  } catch (err) {
+    if (err.message !== "unauthorized") box.innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
+  }
+});
+
+/** Salin body MacroDroid. */
+$("btn-copy-macrodroid").addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("toko-macrodroid").textContent);
+  const b = $("btn-copy-macrodroid");
+  b.textContent = "✓ Tersalin";
+  setTimeout(() => (b.textContent = "Salin Body MacroDroid"), 1500);
+});
+
+/** Simpan konfigurasi notifikasi. */
+$("btn-nt-simpan").addEventListener("click", async () => {
+  const box = $("nt-msg");
+  box.innerHTML = "";
+  try {
+    const r = await api("/store/notify", {
+      method: "POST",
+      body: JSON.stringify({
+        fonnteToken: $("nt-fonnte").value.trim(),
+        adminWa: $("nt-adminwa").value.trim(),
+        resendKey: $("nt-resend").value.trim(),
+        emailFrom: $("nt-emailfrom").value.trim(),
+        waKePembeli: $("nt-wa-pembeli").checked,
+        emailKePembeli: $("nt-email-pembeli").checked,
+      }),
+    });
+    box.innerHTML = `<div class="alert ok">${esc(r.message)}</div>`;
+    setTimeout(() => (box.innerHTML = ""), 6000);
+  } catch (err) {
+    if (err.message !== "unauthorized") box.innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
+  }
+});
+
+/** Muat & render daftar pesanan + riwayat webhook. */
+async function loadOrders() {
+  const d = await api("/orders?limit=100");
+  const rows = d.orders || [];
+  const tb = $("tbody-orders");
+  if (!rows.length) {
+    tb.innerHTML = '<tr><td colspan="8" class="muted">Belum ada pesanan.</td></tr>';
+  } else {
+    tb.innerHTML = rows
+      .map((o) => {
+        const tag =
+          o.status === "COMPLETED" ? "ok" :
+          o.status === "PAID" ? "ok" :
+          o.status === "PENDING" ? "warn" : "off";
+        return `<tr>
+          <td class="mono">${esc(o.order_code)}</td>
+          <td>${esc(o.user_name)}<div class="muted" style="font-size:11.5px">${esc(o.email || "")}${o.whatsapp ? " · " + esc(o.whatsapp) : ""}</div></td>
+          <td>${kek(o.quota_tokens)} token</td>
+          <td class="num on">${rupiahIDR(o.amount_to_pay)}<div class="muted" style="font-size:11.5px">unik +${o.unique_code}</div></td>
+          <td>${o.mode === "key_baru" ? "Key baru" : "Top-up"}</td>
+          <td><span class="tag ${tag}">${esc(o.status)}</span></td>
+          <td class="mono muted">${esc(o.created_at)}</td>
+          <td style="white-space:nowrap">
+            ${o.status === "PENDING" || o.status === "CANCELLED" ? `<button class="btn small" data-ord="${esc(o.order_code)}" data-act="konfirmasi">Lunas?</button>` : ""}
+            ${o.api_key_issued ? `<button class="btn small" data-ord="${esc(o.order_code)}" data-act="lihat-key">Lihat Key</button>` : ""}
+          </td>
+        </tr>`;
+      })
+      .join("");
+  }
+
+  const ev = d.events || [];
+  const te = $("tbody-events");
+  if (!ev.length) {
+    te.innerHTML = '<tr><td colspan="5" class="muted">Belum ada notifikasi DANA masuk.</td></tr>';
+  } else {
+    te.innerHTML = ev
+      .map(
+        (e) => `<tr>
+          <td class="mono muted">${esc(e.created_at)}</td>
+          <td class="num">${e.amount ? rupiahIDR(e.amount) : "—"}</td>
+          <td class="mono">${esc(e.order_code || "—")}</td>
+          <td>${e.matched ? '<span class="tag ok">ya</span>' : '<span class="tag off">tidak</span>'}</td>
+          <td class="muted" style="font-size:12px;word-break:break-word">${esc(e.note || "")}</td>
+        </tr>`
+      )
+      .join("");
+  }
+}
+
+/** Aksi pada tabel pesanan (konfirmasi manual / lihat key). */
+$("tbody-orders").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const kode = btn.dataset.ord;
+  try {
+    if (btn.dataset.act === "konfirmasi") {
+      const ya = await tanya({
+        judul: "Konfirmasi Manual",
+        pesan: `Tandai pesanan ${kode} sebagai LUNAS dan eksekusi otomatis (terbitkan key / tambah kuota + kirim notifikasi)? Tekan ini hanya bila dana BENAR-BENAR sudah masuk.`,
+        ok: "Ya, Lunas",
+      });
+      if (!ya) return;
+      const r = await api(`/orders/${encodeURIComponent(kode)}/confirm`, { method: "POST", body: JSON.stringify({}) });
+      notif(r.message || "Pesanan diproses.", r.ok !== false);
+      await loadOrders();
+    } else if (btn.dataset.act === "lihat-key") {
+      const d = await api("/orders?limit=100");
+      const o = (d.orders || []).find((x) => x.order_code === kode);
+      if (!o) return;
+      await tanya({
+        judul: "Key Pesanan " + kode,
+        pesan: o.api_key_issued || "(tidak ada key — mode top-up: " + (o.target_api_key || "") + " +" + kek(o.quota_tokens) + " token)",
+        ok: "Tutup",
+      });
+    }
+  } catch (err) {
+    if (err.message !== "unauthorized") notif(err.message, false);
+  }
+});
+
+$("btn-orders-refresh").addEventListener("click", () =>
+  loadOrders().catch((e) => { if (e.message !== "unauthorized") notif(e.message, false); })
+);
 
 // ---- Modal ----
 $("modal-close").onclick = tutupModal;

@@ -1794,3 +1794,180 @@ img, svg { max-width: 100%; height: auto; }
   .pra-render { opacity: 1 !important; }
   .pra-render.masuk-jalan { animation: none !important; }
 }
+
+/* ==============================================================
+   TOKO PEMBELIAN (/beli) — paket, QRIS, pembayaran
+   ============================================================== */
+
+/* Kontainer halaman beli sedikit lebih lebar dari .narrow */
+.narrow-beli { max-width: 560px; }
+
+/* Wajib & petunjuk pada label form */
+.req { color: var(--red); }
+.hint { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+
+/* Tab mode pembelian (Key Baru / Top-up) */
+.mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+  margin: var(--s-5) 0 var(--s-3);
+}
+.mode-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  padding: 12px var(--s-4);
+  min-height: var(--touch);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-body);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.mode-tab:hover { border-color: var(--border-2); color: var(--text); }
+.mode-tab.active {
+  border-color: var(--lime-line);
+  background: var(--lime-bg);
+  color: var(--lime);
+}
+
+/* Kisi kartu paket */
+.pkg-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-2);
+}
+.pkg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--s-3) var(--s-2);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.pkg:hover { border-color: var(--border-2); transform: translateY(-1px); }
+.pkg.active {
+  border-color: var(--lime);
+  background: var(--lime-bg);
+  box-shadow: var(--shadow-glow);
+}
+.pkg-tok { font-weight: 700; font-size: 15px; color: var(--text); }
+.pkg-unit { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.pkg-harga { font-size: 12.5px; color: var(--lime); margin-top: 4px; }
+@media (max-width: 480px) { .pkg-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* Ringkasan pesanan sebelum bayar */
+.order-summary { margin: var(--s-4) 0; border: 1px dashed var(--border-2); border-radius: var(--radius); padding: var(--s-3) var(--s-4); }
+.order-summary .kv-row { border-bottom: none; }
+
+/* Tata letak pembayaran: QR kiri, info kanan */
+.pay-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-5);
+  align-items: start;
+  margin-top: var(--s-4);
+}
+@media (max-width: 640px) { .pay-grid { grid-template-columns: 1fr; } }
+
+.pay-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.qr-side { text-align: center; }
+.qr-frame {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border-2);
+}
+.qr-frame img { width: 100%; height: 100%; object-fit: contain; }
+.qr-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.qr-caption { font-size: 12.5px; color: var(--muted); margin: var(--s-2) 0 0; }
+
+/* Kotak nominal utama */
+.amount-box {
+  background: var(--lime-bg);
+  border: 1px solid var(--lime-line);
+  border-radius: var(--radius-lg);
+  padding: var(--s-3) var(--s-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+.amount-box .k { width: 100%; font-size: 12px; color: var(--text-body); }
+.amount-box .v { font-size: 26px; font-weight: 800; color: var(--lime); letter-spacing: .01em; }
+
+/* Langkah bayar */
+.pay-steps { margin: var(--s-4) 0; display: grid; gap: var(--s-2); }
+.pay-step {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: 13.5px;
+  color: var(--text-body);
+}
+.pay-step .no {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--lime-line);
+  color: var(--lime);
+  font-size: 11.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Key final setelah lunas */
+.key-final {
+  margin: var(--s-4) 0;
+  padding: var(--s-4);
+  background: var(--lime-bg);
+  border: 1px solid var(--lime-line);
+  border-radius: var(--radius);
+  word-break: break-all;
+  user-select: all;
+  font-size: 13.5px;
+  color: var(--lime);
+  line-height: 1.6;
+}
+
+/* Pemisah seksi di dalam kartu (tab Toko panel admin) */
+.divider { height: 1px; background: var(--border); margin: var(--s-5) 0; border: 0; }
+
+/* Baris checkbox pengaturan */
+.switch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: 13.5px;
+  color: var(--text-body);
+  cursor: pointer;
+  min-height: var(--touch);
+  margin: 0;
+}
+.switch-row input { width: 16px; height: 16px; accent-color: var(--lime); cursor: pointer; }

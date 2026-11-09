@@ -41,6 +41,10 @@
       <span class="icon-close">✕</span>
     </button>
     <nav id="main-nav">
+      <a href="/beli">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>
+        Beli Token
+      </a>
       <a href="/docs">
         <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         Dokumentasi
@@ -74,7 +78,11 @@
           </p>
 
           <div class="row-actions" style="margin-top:0">
-            <a class="btn primary" href="/portal">
+            <a class="btn primary" href="/beli">
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>
+              Beli Token via QRIS
+            </a>
+            <a class="btn" href="/portal">
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               Masuk Portal Member
             </a>
@@ -143,6 +151,31 @@
         <h3>Tanpa lock-in</h3>
         <p>Endpoint standar <code>/v1/chat/completions</code> dan <code>/v1/models</code>. Pindah provider cukup ganti satu URL.</p>
       </div>
+    </div>
+
+    <!-- ============ HARGA / BELI ============ -->
+    <div class="card mt-4">
+      <h2>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>
+        Harga Paket Token
+      </h2>
+      <p class="muted" style="margin-top:0">Beli lewat <a href="/beli">halaman toko</a> — bayar QRIS (DANA/GoPay/OVO/m-banking), key aktif <b>otomatis</b> begitu pembayaran terkonfirmasi. Kuota tidak pernah kedaluwarsa.</p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Paket</th><th class="num">Kuota Token</th><th class="num">Harga</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr><td><b>10 Juta</b></td><td class="num">10.000.000</td><td class="num on">Rp 8.000</td><td><a class="btn small" href="/beli?paket=10m">Beli</a></td></tr>
+            <tr><td><b>20 Juta</b></td><td class="num">20.000.000</td><td class="num on">Rp 16.000</td><td><a class="btn small" href="/beli?paket=20m">Beli</a></td></tr>
+            <tr><td><b>50 Juta</b></td><td class="num">50.000.000</td><td class="num on">Rp 36.000</td><td><a class="btn small" href="/beli?paket=50m">Beli</a></td></tr>
+            <tr><td><b>100 Juta</b></td><td class="num">100.000.000</td><td class="num on">Rp 70.000</td><td><a class="btn small" href="/beli?paket=100m">Beli</a></td></tr>
+            <tr><td><b>200 Juta</b></td><td class="num">200.000.000</td><td class="num on">Rp 130.000</td><td><a class="btn small" href="/beli?paket=200m">Beli</a></td></tr>
+            <tr><td><b>500 Juta</b></td><td class="num">500.000.000</td><td class="num on">Rp 300.000</td><td><a class="btn small" href="/beli?paket=500m">Beli</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted mt-4" style="margin-bottom:0">Sudah punya key? Top-up kuota yang sama juga lewat <a href="/beli?mode=topup">/beli</a> — kuota langsung bertambah di key lama Anda.</p>
     </div>
 
     <!-- ============ ENDPOINT ============ -->

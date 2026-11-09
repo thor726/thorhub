@@ -64,6 +64,66 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_login_attempts_blocked ON login_attempts (blocked_until);
+
+  -- =============================================================
+  -- TOKO PEMBELIAN OTOMATIS (QRIS DANA)
+  -- =============================================================
+
+  -- Pesanan pembelian: key API baru ATAU top-up kuota key lama.
+  -- Alur: PENDING → (webhook DANA cocok) → PAID → fulfillment → COMPLETED.
+  -- Kode unik 1-999 ditambahkan ke nominal agar webhook bisa mencocokkan
+  -- pembayaran secara EKSAK per pesanan (sama seperti Thor-market).
+  CREATE TABLE IF NOT EXISTS orders (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_code      TEXT    NOT NULL UNIQUE,            -- THX-XXXXXXXX
+    access_token    TEXT    NOT NULL,                   -- kunci akses halaman status (anti begas)
+    mode            TEXT    NOT NULL,                   -- 'key_baru' | 'topup'
+    package_id      TEXT    NOT NULL,                   -- '10m' … '500m'
+    quota_tokens    INTEGER NOT NULL,                   -- token yang dibeli
+    user_name       TEXT    NOT NULL,                   -- nama pembeli
+    email           TEXT    NOT NULL DEFAULT '',        -- tujuan struk + key (opsional)
+    whatsapp        TEXT    NOT NULL DEFAULT '',        -- tujuan notifikasi WA (opsional)
+    target_api_key  TEXT    NOT NULL DEFAULT '',        -- mode topup: key yang ditambah
+    api_key_issued  TEXT    NOT NULL DEFAULT '',        -- mode key_baru: key yang diterbitkan saat PAID
+    base_amount     INTEGER NOT NULL,                   -- harga paket (sebelum kode unik)
+    unique_code     INTEGER NOT NULL DEFAULT 0,         -- 1-999
+    amount_to_pay   INTEGER NOT NULL,                   -- base_amount + unique_code
+    payment_method  TEXT    NOT NULL DEFAULT 'QRIS DANA',
+    status          TEXT    NOT NULL DEFAULT 'PENDING', -- PENDING|PAID|COMPLETED|CANCELLED
+    note            TEXT    NOT NULL DEFAULT '',        -- catatan fulfillment/admin
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now')),
+    paid_at         TEXT,
+    completed_at    TEXT,
+    expires_at      INTEGER NOT NULL                    -- epoch ms (masa berlaku tagihan)
+  );
+
+  -- Pencocokan webhook selalu menyaring by amount_to_pay → indeks wajib
+  CREATE INDEX IF NOT EXISTS idx_orders_amount ON orders (amount_to_pay);
+  CREATE INDEX IF NOT EXISTS idx_orders_status_exp ON orders (status, expires_at);
+  CREATE INDEX IF NOT EXISTS idx_orders_created ON orders (created_at);
+
+  -- Riwayat webhook pembayaran (audit): setiap notifikasi DANA yang masuk
+  -- dicatat beserta hasil pencocokannya agar admin bisa menelusuri.
+  CREATE TABLE IF NOT EXISTS payment_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    source     TEXT    NOT NULL DEFAULT 'dana',
+    raw_text   TEXT    NOT NULL DEFAULT '',
+    amount     INTEGER NOT NULL DEFAULT 0,
+    matched    INTEGER NOT NULL DEFAULT 0,              -- boolean 0/1
+    order_code TEXT    NOT NULL DEFAULT '',
+    note       TEXT    NOT NULL DEFAULT '',              -- 'secret-invalid ip=…', 'kurang-biaya-admin:…'
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_payment_events_time ON payment_events (created_at);
+
+  -- Konfigurasi toko (JSON per kunci): 'qris' {enabled,static,secret},
+  -- 'notify' {fonnteToken, adminWa, resendKey, emailFrom, ...}.
+  -- Disimpan di DB (bukan .env) agar bisa diubah dari panel admin tanpa deploy.
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
 
 module.exports = db;

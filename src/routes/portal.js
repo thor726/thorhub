@@ -325,6 +325,146 @@ router.get("/admin/models", requireAdminSession, (_req, res) => {
 });
 
 // ---------------------------------------------------------------
+// ADMIN — TOKO & PEMBAYARAN (QRIS DANA otomatis)
+// Konfigurasi toko disimpan di tabel settings (bukan .env) sehingga
+// bisa diubah dari panel ini tanpa edit server / restart layanan.
+// ---------------------------------------------------------------
+const storeLib = require("../lib/store");
+const storeRoutes = require("./store");
+const qrisLib = require("../lib/qris");
+
+/** GET /portal/admin/store — konfigurasi toko + daftar paket. */
+router.get("/admin/store", requireAdminSession, (_req, res) => {
+  const q = storeLib.getQrisSettings();
+  const n = storeLib.getNotifySettings();
+  res.json({
+    data: {
+      packages: storeLib.PACKAGES,
+      qris: { enabled: !!q.enabled, static: q.static || "", secret: q.secret || "", secret_ada: !!q.secret },
+      notify: {
+        fonnteToken: n.fonnteToken || "",
+        adminWa: n.adminWa || "",
+        resendKey: n.resendKey || "",
+        emailFrom: n.emailFrom || "",
+        waKePembeli: n.waKePembeli !== false,
+        emailKePembeli: n.emailKePembeli !== false,
+      },
+      expiry_hours: storeLib.payment.ORDER_EXPIRY_HOURS,
+      webhook_path: "/store/webhook/dana",
+    },
+  });
+});
+
+/** POST /portal/admin/store/qris — simpan string QRIS statis + on/off. */
+router.post("/admin/store/qris", requireAdminSession, (req, res) => {
+  const { static: staticQris, enabled } = req.body || {};
+  const q = storeLib.getQrisSettings();
+  let merchant = null;
+
+  if (typeof staticQris !== "undefined") {
+    const nilai = String(staticQris || "").trim();
+    const cek = qrisLib.validateStaticQris(nilai);
+    if (!cek.ok) {
+      return res.status(400).json({ error: { message: cek.error, code: "qris_invalid" } });
+    }
+    q.static = nilai;
+    merchant = { name: cek.merchantName, city: cek.merchantCity };
+  }
+  if (typeof enabled !== "undefined") q.enabled = !!enabled; // niat admin murni — kesiapan toko dicek runtime (enabled+static+secret)
+  storeLib.simpanSetting("qris", q);
+  res.json({
+    data: {
+      message: "Pengaturan QRIS disimpan.",
+      enabled: q.enabled,
+      qris_valid: !!q.static,
+      merchant,
+    },
+  });
+});
+
+/** POST /portal/admin/store/secret — (re)generate secret webhook. */
+router.post("/admin/store/secret", requireAdminSession, (_req, res) => {
+  const q = storeLib.getQrisSettings();
+  q.secret = storeLib.generateWebhookSecret();
+  storeLib.simpanSetting("qris", q);
+  res.json({ data: { message: "Secret webhook baru dibuat. Perbarui konfigurasi MacroDroid Anda.", secret: q.secret } });
+});
+
+/** POST /portal/admin/store/notify — simpan konfigurasi notifikasi. */
+router.post("/admin/store/notify", requireAdminSession, (req, res) => {
+  const b = req.body || {};
+  const n = storeLib.getNotifySettings();
+  if (typeof b.fonnteToken !== "undefined") n.fonnteToken = String(b.fonnteToken || "").trim().slice(0, 200);
+  if (typeof b.adminWa !== "undefined") {
+    let wa = String(b.adminWa || "").trim().replace(/[^\d]/g, "");
+    if (wa.startsWith("0")) wa = "62" + wa.slice(1);
+    n.adminWa = wa.slice(0, 20);
+  }
+  if (typeof b.resendKey !== "undefined") n.resendKey = String(b.resendKey || "").trim().slice(0, 200);
+  if (typeof b.emailFrom !== "undefined") n.emailFrom = String(b.emailFrom || "").trim().slice(0, 120);
+  if (typeof b.waKePembeli !== "undefined") n.waKePembeli = !!b.waKePembeli;
+  if (typeof b.emailKePembeli !== "undefined") n.emailKePembeli = !!b.emailKePembeli;
+  storeLib.simpanSetting("notify", n);
+  res.json({ data: { message: "Pengaturan notifikasi disimpan." } });
+});
+
+/** POST /portal/admin/store/test — uji webhook DANA (secret + parser + pencocokan). */
+router.post("/admin/store/test", requireAdminSession, (req, res) => {
+  const q = storeLib.getQrisSettings();
+  if (!q.secret) {
+    return res.status(400).json({ error: { message: "Buat secret webhook dulu sebelum menguji.", code: "no_secret" } });
+  }
+  // Payload uji: nominal 499.999.999 pasti tidak pernah menjadi nominal pesanan
+  // (maks paket hanya 300.000 + 999) sehingga uji TIDAK melunaskan pesanan.
+  const teks = "DANA: Kamu menerima Rp499.999.999 dari TES ADMIN (uji webhook ThorHub)";
+  const hasil = storeRoutes.prosesWebhookDana(
+    JSON.stringify({ secret_token: q.secret, text: teks }),
+    "application/json",
+    "",
+    "selftest-admin",
+    { uji: true }
+  );
+  res.status(hasil.status === 401 ? 400 : 200).json({
+    data: { ok: !!hasil.payload.success && hasil.payload.matched === true, hasil: hasil.payload },
+  });
+});
+
+/** GET /portal/admin/orders — daftar pesanan terbaru (100). */
+router.get("/admin/orders", requireAdminSession, (req, res) => {
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+  const rows = db
+    .prepare(
+      `SELECT id, order_code, mode, package_id, quota_tokens, user_name, email, whatsapp,
+              target_api_key, api_key_issued, base_amount, unique_code, amount_to_pay,
+              payment_method, status, note, created_at, paid_at, completed_at, expires_at
+       FROM orders ORDER BY id DESC LIMIT ?`
+    )
+    .all(limit);
+  const events = db
+    .prepare(`SELECT id, amount, matched, order_code, note, created_at FROM payment_events ORDER BY id DESC LIMIT 50`)
+    .all();
+  res.json({ data: { orders: rows, events } });
+});
+
+/** POST /portal/admin/orders/:code/confirm — konfirmasi manual (lunas + eksekusi). */
+router.post("/admin/orders/:code/confirm", requireAdminSession, (req, res) => {
+  const order = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(String(req.params.code || "").toUpperCase());
+  if (!order) return res.status(404).json({ error: { message: "Pesanan tidak ditemukan.", code: "not_found" } });
+  if (order.status === "COMPLETED") {
+    return res.status(409).json({ error: { message: "Pesanan sudah selesai sebelumnya.", code: "already_completed" } });
+  }
+  if (order.status === "CANCELLED") {
+    // Pembayaran terlambat setelah kedaluwarsa → izinkan admin mengaktifkan kembali
+    db.prepare(`UPDATE orders SET status = 'PENDING', note = 'dibuka ulang admin' WHERE id = ?`).run(order.id);
+    order.status = "PENDING";
+  }
+  const hasil = storeLib.prosesPesananLunas(order);
+  storeRoutes.logEvent(order.amount_to_pay, true, order.order_code, "", `konfirmasi-manual admin`);
+  const final = db.prepare("SELECT * FROM orders WHERE order_code = ?").get(order.order_code);
+  res.json({ data: { ok: hasil.ok, message: hasil.pesan, order: final } });
+});
+
+// ---------------------------------------------------------------
 // MEMBER — login / logout / me
 // ---------------------------------------------------------------
 router.post("/member/login", bruteforce.guard("member"), async (req, res) => {

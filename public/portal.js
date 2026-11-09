@@ -83,13 +83,14 @@ async function boot() {
 
   const pct = d.token_limit > 0 ? Math.round((d.tokens_used / d.token_limit) * 100) : 0;
 
-  // --- Peringatan ---
+  // --- Peringatan + ajakan top-up otomatis (tautan ke toko /beli) ---
+  const tautanTopup = '<a class="btn small primary" style="margin-left:10px" href="/beli?mode=topup&key=' + encodeURIComponent(d.api_key) + '">Top-up Sekarang</a>';
   if (!d.is_active) {
     $("status-warn").innerHTML = '<div class="alert err">Key Anda sedang dinonaktifkan. Akses chat diblokir. Hubungi admin.</div>';
   } else if (d.tokens_remaining <= 0) {
-    $("status-warn").innerHTML = '<div class="alert err">Kuota token Anda habis. Silakan top-up agar bisa memakai API kembali.</div>';
+    $("status-warn").innerHTML = '<div class="alert err">Kuota token Anda habis. Top-up agar bisa memakai API kembali — aktif otomatis setelah bayar via QRIS.' + tautanTopup + '</div>';
   } else if (pct >= 80) {
-    $("status-warn").innerHTML = `<div class="alert warn">Kuota terpakai <b>${pct}%</b>. Segera top-up sebelum habis.</div>`;
+    $("status-warn").innerHTML = `<div class="alert warn">Kuota terpakai <b>${pct}%</b>. Segera top-up sebelum habis — bayar QRIS, aktif otomatis.` + tautanTopup + '</div>';
   } else {
     $("status-warn").innerHTML = "";
   }

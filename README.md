@@ -39,6 +39,7 @@ Tersedia **3 antarmuka**:
 16. [Deployment Produksi](#16-deployment-produksi)
 17. [Backup & Pemeliharaan](#17-backup--pemeliharaan)
 18. [Pemecahan Masalah](#18-pemecahan-masalah)
+19. [Toko Pembelian Otomatis (QRIS DANA)](#19-toko-pembelian-otomatis-qris-dana)
 
 ---
 
@@ -68,8 +69,9 @@ Pembeli (sk-thor-xxx)                    Admin (browser)
 Provider utama (Re:Link Gateway / OpenAI / OpenRouter / dll.)
 ```
 
-**Data disimpan di SQLite** (`data/gateway.db`): tabel `api_keys` (sub-key + kuota) dan
-`sessions` (sesi login panel).
+**Data disimpan di SQLite** (`data/gateway.db`): tabel `api_keys` (sub-key + kuota),
+`sessions` (sesi login panel), `orders` + `payment_events` + `settings` (toko pembelian
+otomatis — lihat [bagian 19](#19-toko-pembelian-otomatis-qris-dana)).
 
 ---
 
@@ -90,22 +92,29 @@ llm-gateway-express/
 │   ├── db.js                 # SQLite (better-sqlite3) + skema tabel
 │   ├── lib/
 │   │   ├── session.js        # Sesi login admin & member (cookie + SQLite)
-│   │   └── models.js         # Snapshot resmi daftar model + multiplier (fallback)
+│   │   ├── models.js         # Snapshot resmi daftar model + multiplier (fallback)
+│   │   ├── qris.js           # QRIS statis → dinamis (EMVCo TLV + CRC16) + render PNG
+│   │   ├── payment.js        # Kode unik 1-999, parser webhook DANA, kedaluwarsa
+│   │   ├── store.js          # Katalog paket, konfigurasi toko, fulfillment pesanan
+│   │   ├── notify.js         # Notifikasi WA (Fonnte) & email (Resend) best-effort
+│   │   └── ratelimit.js      # Pembatas laju in-memory utk endpoint toko publik
 │   ├── middleware/
 │   │   └── auth.js           # Otentikasi Sub-API Key + cek kuota
 │   ├── routes/
 │   │   ├── chat.js           # POST /v1/chat/completions, GET /v1/models
-│   │   ├── portal.js         # Sesi login + daftar model publik (/portal/*)
+│   │   ├── portal.js         # Sesi login + daftar model publik (/portal/*) + panel toko
+│   │   ├── store.js          # Toko pembelian: /store/* (order, status, webhook DANA)
 │   │   └── admin.js          # REST API manajemen key (ADMIN_API_KEY)
 │   └── services/
 │       ├── limiter.js        # Rate limit DIMATIKAN (unlimited, tanpa antrean)
 │       └── proxy.js          # Forwarding + hitung token + timeout
 │
 ├── public/                   # Antarmuka web (tanpa build step)
-│   ├── index.html  + inline # Landing page + status live
+│   ├── index.html  + inline # Landing page + status live + tabel harga
+│   ├── beli.html   + beli.js      # Toko pembelian (paket → QRIS → key otomatis)
 │   ├── docs.html   + docs.js      # Dokumentasi + tabel model live
-│   ├── portal.html + portal.js    # Dashboard member
-│   ├── admin.html  + admin.js     # Panel admin
+│   ├── portal.html + portal.js    # Dashboard member (+ CTA top-up)
+│   ├── admin.html  + admin.js     # Panel admin (+ tab Toko & Pesanan)
 │   ├── login-admin.html  login-member.html   # Fallback halaman login
 │   ├── nav.js                # Toggle menu navigasi
 │   ├── bg.js                 # Latar bertema ThorHub (grid + jaringan + halo + kilat)
@@ -1071,6 +1080,106 @@ curl -s https://llm.thormarket.site/health
 # 4. nginx OK?
 nginx -t
 ```
+
+---
+
+## 19. Toko Pembelian Otomatis (QRIS DANA)
+
+Toko ini mengadopsi mekanisme yang sama dengan toko **Thor-market**: QRIS statis
+milik admin diubah menjadi **QRIS dinamis per-transaksi** (nominal + kode unik
+tertanam di dalam QR), lalu pembayaran dikonfirmasi **otomatis** dari
+notifikasi DANA di HP admin lewat aplikasi **MacroDroid** — tanpa payment
+gateway pihak ketiga.
+
+### 19.1 Harga paket
+
+| Paket | Kuota Token | Harga |
+|---|---|---|
+| 10 Juta | 10.000.000 | Rp 8.000 |
+| 20 Juta | 20.000.000 | Rp 16.000 |
+| 50 Juta | 50.000.000 | Rp 36.000 |
+| 100 Juta | 100.000.000 | Rp 70.000 |
+| 200 Juta | 200.000.000 | Rp 130.000 |
+| 500 Juta | 500.000.000 | Rp 300.000 |
+
+Dua mode pembelian: **Key Baru** (API key `sk-thor-…` diterbitkan otomatis) dan
+**Top-up** (`token_limit` key lama bertambah otomatis). Masa berlaku tagihan
+**2 jam**; melewati itu pesanan dibatalkan otomatis dan kode uniknya dilepas.
+
+### 19.2 Alur pembelian
+
+```
+Pembeli (/beli)                 Server                        HP Admin
+  pilih paket+mode  ──POST /store/orders──▶  nominal = harga + kode unik 1-999
+                                             QRIS statis → QRIS DINAMIS (Tag 54)
+  scan & bayar ◀── QR + nominal persis ────
+      │                                                notifikasi DANA masuk
+      │                                                      │ MacroDroid
+      │                                          POST /store/webhook/dana
+      │                                {secret_token, text:"Kamu menerima Rp8.137"}
+      │                                ekstrak nominal → cocok EKSAK → PAID
+      │                                eksekusi: terbitkan key / +kuota → COMPLETED
+  polling 5 dtk ──GET /store/order/:code──▶  COMPLETED: key tampil + salin
+  WA (Fonnte) & email (Resend) ◀── key + struk ──
+```
+
+- Kode unik 1–999 membuat nominal setiap pesanan PENDING unik, sehingga webhook
+  selalu tahu pesanan mana yang dibayar (dicocokkan **eksak**, pesanan terlama
+  didahulukan).
+- Pembayaran **kurang** dari total TIDAK dilunaskan otomatis — dicatat di
+  riwayat webhook dan menunggu konfirmasi admin (tab Toko → "Lunas?").
+- Halaman pesanan memakai **access token** (diberikan sekali saat order dibuat,
+  disimpan di `localStorage`): tanpa token, polling hanya melihat status ringkas
+  — QR dan API key tidak bocor ke orang lain yang tahu kode pesanan.
+
+### 19.3 Setup sekali jalan (panel admin)
+
+Buka **/admin → tab "Toko & Pesanan"**:
+
+1. **Tempel string QRIS statis** (aplikasi DANA → menu *QRIS Saya* → salin
+   stringnya). Server memvalidasi struktur EMVCo + CRC sebelum menerima.
+2. **Buat Secret Baru** → salin body MacroDroid yang tampil:
+   `{"secret_token":"…","text":"[notif_text]"}`
+3. Di HP admin, pasang **MacroDroid**: trigger *Notification Received* (aplikasi
+   DANA) → aksi *HTTP Request* `POST https://domain-anda/store/webhook/dana`,
+   `Content-Type: application/json`, body di atas — `[notif_text]` disisipkan
+   lewat tombol **Magic Text → Notification Text**.
+4. Klik **Uji Webhook** (server memverifikasi secret + parser tanpa melunaskan
+   pesanan mana pun), lalu **aktifkan toko**.
+5. (Opsional) isi **Fonnte** (token device + nomor WA admin) dan **Resend**
+   (API key + alamat pengirim terverifikasi) agar key/struk terkirim ke WA &
+   email pembeli — API key untuk pembelian Key Baru **wajib** punya email
+   pembeli karena dikirim juga ke email.
+
+### 19.4 Keamanan & batasan
+
+- Secret webhook dibandingkan **timing-safe**; kegagalan dibatasi
+  (20 secret salah / 10 menit / IP → blokir 10 menit) dan tercatat di riwayat
+  webhook. Secret **tidak boleh** lewat query URL (`?secret_token=`) — selalu
+  header `x-secret-token` atau field body.
+- Semua endpoint toko publik diberi **rate limit** in-memory (order 10/menit/IP,
+  polling 120/menit/IP, webhook 30/menit/IP) — berlapis dengan `limit_req` nginx.
+- Fulfillment **idempoten**: notifikasi DANA yang dikirim ulang tidak akan
+  menerbitkan key / menambah kuota dua kali.
+- Konfirmasi pembayaran bergantung pada **HP admin online + MacroDroid aktif**.
+  Cek riwayat webhook di panel admin bila pembayaran lama tidak terkonfirmasi;
+  tombol "Lunas?" tersedia untuk konfirmasi manual.
+- Uang keluar (kirim/tarik/bayar) tidak pernah dicocokkan sebagai pembayaran.
+
+### 19.5 Endpoint toko (publik)
+
+| Metode | Endpoint | Keterangan |
+|---|---|---|
+| GET | `/store/packages` | Katalog paket + status kesiapan toko |
+| POST | `/store/orders` | Buat pesanan → nominal + QRIS dinamis + access token |
+| GET | `/store/order/:code?t=<token>` | Status pesanan (polling); dengan token = detail |
+| POST | `/store/order/:code/cancel` | Pembeli batalkan pesanan PENDING |
+| POST | `/store/webhook/dana` | Listener notifikasi DANA (MacroDroid) |
+
+Endpoint panel (sesi admin): `GET/POST /portal/admin/store*`,
+`GET /portal/admin/orders`, `POST /portal/admin/orders/:code/confirm`.
+
+Uji end-to-end: `node test/e2e-toko.js`
 
 ---
 
