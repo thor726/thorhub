@@ -993,7 +993,7 @@ function renderDaftarPesanan(rows) {
             : o.status === "COMPLETED"
               ? `selesai${o.completed_at ? " " + formatWaktu(o.completed_at) : ""}`
               : o.note || "dibatalkan";
-      return `<article class="order-card" data-code="${esc(o.order_code)}" role="button" tabindex="0" aria-label="Lacak pesanan ${esc(o.order_code)}">
+      return `<article class="order-card" data-code="${esc(o.order_code)}">
         <div class="oc-head">
           <span class="oc-kode mono">${esc(o.order_code)}</span>
           <span class="tag ${kelasBadge(o.status)}">${esc(o.status_label)}</span>
@@ -1006,27 +1006,22 @@ function renderDaftarPesanan(rows) {
           <div class="oc-amount mono">${rupiah(o.amount_to_pay)}</div>
         </div>
         <div class="oc-foot">
-          <span class="oc-hint">klik baris untuk melacak →</span>
-          <div class="oc-aksi">${aksi}</div>
+          <span class="oc-hint">klik kartu untuk melacak →</span>
+          <div class="oc-aksi"><button class="btn small" data-lacak="${esc(o.order_code)}" type="button">Lacak</button>${aksi}</div>
         </div>
       </article>`;
     })
     .join("");
 }
 
-// Klik kartu → buka modal pelacakan; tombol "Bayar Sekarang" → langsung tampil QR
+// Klik kartu / tombol "Lacak" → buka modal pelacakan; tombol "Bayar Sekarang" → langsung tampil QR.
+// Kartu sendiri TIDAK diberi role/aria-label palsu (axe: nested-interactive &
+// label-content-name-mismatch) — keyboard memakai tombol "Lacak" yang nyata.
 $("order-list").addEventListener("click", (e) => {
   const card = e.target.closest(".order-card");
   if (!card) return;
   const bayar = e.target.closest("[data-bayar]");
   bukaLacak(card.dataset.code, { langsungBayar: !!bayar });
-});
-$("order-list").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" && e.key !== " ") return;
-  const card = e.target.closest(".order-card");
-  if (!card) return;
-  e.preventDefault();
-  bukaLacak(card.dataset.code);
 });
 
 // Filter status (pill) + pencarian kode

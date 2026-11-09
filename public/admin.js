@@ -750,7 +750,7 @@ async function loadOrders() {
     tb.innerHTML = rows
       .map((o) => {
         const lewat = o.expires_at && o.expires_at < Date.now();
-        return `<tr class="row-lacak" data-code="${esc(o.order_code)}" tabindex="0" role="button" aria-label="Buka detail pesanan ${esc(o.order_code)}" title="Klik untuk melacak pesanan ini">
+        return `<tr class="row-lacak" data-code="${esc(o.order_code)}" title="Klik untuk melacak pesanan ini">
           <td class="mono"><b>${esc(o.order_code)}</b></td>
           <td>${esc(o.user_name)}<div class="muted" style="font-size:11.5px">${esc(o.email || "")}${o.whatsapp ? " · " + esc(o.whatsapp) : ""}</div></td>
           <td>${kek(o.quota_tokens)} token</td>
@@ -997,19 +997,14 @@ $("tbody-orders").addEventListener("click", async (e) => {
   }
 });
 
-// Klik baris (di luar tombol aksi) / Enter pada baris → buka pelacakan lengkap,
-// sama seperti kartu pesanan di portal member.
+// Klik baris (di luar tombol aksi) → buka pelacakan lengkap, sama seperti kartu
+// pesanan di portal member. Keyboard: tombol "Detail" di kolom Aksi (selalu ada)
+// — baris sengaja TIDAK diberi role/tabindex palsu (axe: nested-interactive &
+// label-content-name-mismatch karena di dalamnya ada tombol aksi).
 $("tbody-orders").addEventListener("click", async (e) => {
   if (e.target.closest("button[data-act]")) return; // tombol punya handler sendiri
   const tr = e.target.closest("tr.row-lacak[data-code]");
   if (tr) await bukaDetailOrder(tr.dataset.code);
-});
-$("tbody-orders").addEventListener("keydown", async (e) => {
-  if (e.key !== "Enter" && e.key !== " ") return;
-  const tr = e.target.closest("tr.row-lacak[data-code]");
-  if (!tr) return;
-  e.preventDefault();
-  await bukaDetailOrder(tr.dataset.code);
 });
 
 /* ---------- Filter, pencarian & paginasi ---------- */

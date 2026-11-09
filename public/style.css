@@ -28,11 +28,13 @@
 
   /* Teks — rasio kontras di atas latar #0a0a0a (WCAG):
      --text ~16:1 (AAA) | --text-body ~13:1 (AAA)
-     --muted ~6.2:1 (lolos AA teks normal) | --muted-2 ~3:1 (hanya mikro-teks dekoratif) */
+     --muted ~6.2:1 (lolos AA teks normal)
+     --muted-2 ~4.8:1 di kartu / ~5.2:1 di latar (lolos AA teks normal,
+     dipakai untuk mikro-teks berkonten: label kuota, sumbu grafik, subjudul live) */
   --text: #e8e8e8;
   --text-body: #c2c6cc;
   --muted: #8b929c;
-  --muted-2: #676c73;
+  --muted-2: #7d838b;
 
   /* Aksen utama: lime */
   --lime: #a3e635;
@@ -149,10 +151,17 @@ img, svg, video, table, pre { max-width: 100%; }
 
 a { color: var(--lime); text-decoration: none; transition: color var(--t-fast) ease; }
 a:hover { text-decoration: underline; color: #bdf05a; }
-a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+/* Tautan DI DALAM aliran teks harus terbedakan tanpa warna saja
+   (WCAG 1.4.1 — axe: link-in-text-block): selalu bergaris bawah */
+p a, li a, dd a, .prose a, .hint a { text-decoration: underline; text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, pre:focus-visible, .table-scroll:focus-visible {
   outline: 2px solid var(--lime);
   outline-offset: 2px;
 }
+
+/* Wilayah gulir (tabel lebar, blok kode) harus bisa menerima fokus keyboard
+   (WCAG 2.1 / axe: scrollable-region-focusable) — tabindex dipasang oleh nav.js,
+   di sini cukup umpan balik fokusnya. */
 
 button, a, select, summary, label[for],
 input[type="checkbox"], input[type="radio"], [role="tab"] { cursor: pointer; }
@@ -434,6 +443,16 @@ p {
 }
 .muted { color: var(--muted); }
 .mono { font-family: var(--mono); font-size: 13px; word-break: break-word; }
+/* Teks khusus pembaca layar — dipakai header tabel tanpa label visual */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 /* Kata kunci di dalam paragraf harus MENONJOL dari teks di sekitarnya */
 strong, b { color: var(--text); font-weight: 700; }
 

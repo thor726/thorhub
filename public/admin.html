@@ -255,7 +255,7 @@
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
             Pembayaran QRIS DANA Otomatis
           </h2>
-          <p class="muted" style="margin-top:0;font-size:13px">
+          <p class="lead">
             Tempel string <b>QRIS statis</b> Anda (salin dari aplikasi DANA → menu QRIS). Setiap pesanan otomatis
             diubah jadi QRIS dinamis dengan nominal + kode unik 1–999, lalu dikonfirmasi otomatis lewat webhook
             notifikasi DANA (MacroDroid).
@@ -279,7 +279,7 @@
             <div class="kv-row"><span>URL webhook</span><b class="mono" id="toko-webhook-url" style="word-break:break-all">—</b></div>
             <div class="kv-row"><span>Secret</span><b class="mono" id="toko-secret" style="word-break:break-all">—</b></div>
           </div>
-          <p class="muted" style="font-size:12.5px;margin:8px 0">
+          <p class="lead" style="margin:8px 0">
             Di aplikasi <b>MacroDroid</b> (HP admin): buat macro <i>Notification → DANA</i> → aksi <b>HTTP POST</b> ke URL di atas
             dengan body berikut (<code>[notif_text]</code> disisipkan lewat tombol <b>Magic Text → Notification Text</b>):
           </p>
@@ -301,7 +301,7 @@
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
             Notifikasi WhatsApp &amp; Email
           </h2>
-          <p class="muted" style="margin-top:0;font-size:13px">
+          <p class="lead">
             Setelah pesanan lunas: API key dikirim ke pembeli via <b>WhatsApp (Fonnte)</b> dan <b>email (Resend)</b>,
             plus notifikasi ke WA admin. Semua opsional — key tetap tampil di halaman pesanan pembeli.
           </p>
@@ -337,7 +337,7 @@
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
             Pelacakan Pesanan &amp; Pembayaran
           </h2>
-          <p class="muted" style="margin-top:0;font-size:13px">
+          <p class="lead">
             Lacak setiap pesanan seperti toko online: status, linimasa kejadian, notifikasi DANA yang masuk,
             hasil pengiriman key, dan aksi manual bila ada masalah pembayaran.
           </p>
@@ -383,7 +383,7 @@
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
             Riwayat Notifikasi DANA (50 terakhir)
           </h2>
-          <p class="muted" style="margin-top:0;font-size:13px">
+          <p class="lead">
             Semua webhook dari MacroDroid dicatat di sini — termasuk yang <b>gagal cocok</b> (secret salah, nominal kurang,
             tidak ada pesanan). Ini alat utama melacak "pembayaran sudah masuk tapi pesanan tidak lunas".
           </p>

@@ -316,7 +316,7 @@ function renderModels(filter = "") {
       <th>Kemampuan</th>
       <th class="num">Multiplier</th>
       <th class="col-status">Status</th>
-      <th class="col-action"></th>
+      <th class="col-action"><span class="sr-only">Aksi</span></th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
