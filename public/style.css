@@ -26,11 +26,13 @@
   --line: #252a31;
   --line-2: #343a43;
 
-  /* Teks */
-  --text: #e0e0e0;
-  --text-body: #b4b4b4;
-  --muted: #707070;
-  --muted-2: #4a4a4a;
+  /* Teks — rasio kontras di atas latar #0a0a0a (WCAG):
+     --text ~16:1 (AAA) | --text-body ~13:1 (AAA)
+     --muted ~6.2:1 (lolos AA teks normal) | --muted-2 ~3:1 (hanya mikro-teks dekoratif) */
+  --text: #e8e8e8;
+  --text-body: #c2c6cc;
+  --muted: #8b929c;
+  --muted-2: #676c73;
 
   /* Aksen utama: lime */
   --lime: #a3e635;
@@ -69,6 +71,21 @@
   --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --font: var(--sans);
 
+  /* Skala tipografi modular - tiap level heading kontras jelas:
+     H1 26-38/800 > H2 19-23/700 > H3 16-17.5/650 > body 15/400 > mikro 11-12 */
+  --fs-h1: clamp(26px, 5.5vw, 38px);
+  --fs-h2: clamp(19px, 3.4vw, 23px);
+  --fs-h3: clamp(16px, 2.6vw, 17.5px);
+  --fs-lead: clamp(15.5px, 2.4vw, 17.5px);
+  --lh-heading: 1.18;
+  --lh-body: 1.62;
+  --ls-tight: -.02em;
+  --ls-snug: -.01em;
+  /* Measure/panjang baris: 72ch ~ 620px, 80ch ~ 690px pada font 15-15.5px
+     (berada di rentang nyaman 60-75ch yang direkomendasikan untuk keterbacaan) */
+  --measure: min(72ch, 100%);
+  --measure-wide: min(80ch, 100%);
+
   --touch: 44px;
 
   /* Bayangan — minim, lebih banyak pakai border */
@@ -97,7 +114,7 @@ body {
   color: var(--text);
   min-height: 100vh;
   min-height: 100dvh; /* lebih akurat di mobile (address bar dinamis) */
-  line-height: 1.55;
+  line-height: 1.6;
   font-size: 15px;
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
@@ -341,14 +358,25 @@ input[type="checkbox"], input[type="radio"], [role="tab"] { cursor: pointer; }
 @media (min-width: 641px) { .nav-toggle { display: none; } }
 
 /* ==============================================================
-   TIPOGRAFI
+   TIPOGRAFI — hierarki 4 tingkat yang kontras & mudah dipindai
+   --------------------------------------------------------------
+   Prinsip:
+   1. Tiap level heading BERBEDA JELAS (ukuran + berat + tracking):
+      H1 26-38px/800  >  H2 19-23px/700  >  H3 16-17.5px/650  >  body 15px/400.
+   2. Line-height: heading 1.18 (rapat = terbaca satu blok), body 1.62
+      (longgar = nyaman dibaca per baris).
+   3. Letter-spacing negatif HANYA pada heading besar (optik lebih padat & modern);
+      body text dibiarkan normal.
+   4. Measure: paragraf dibatasi 72ch (~620px) dan blok prosa 80ch (~690px)
+      agar baris tidak menerawang di layar lebar.
+   5. Spacing konsisten grid 8pt: H1 +16, H2 +12, H3 +8, paragraf +12.
    ============================================================== */
 h1 {
-  font-size: clamp(23px, 5vw, 34px);
-  line-height: 1.15;
-  font-weight: 700;
-  letter-spacing: -.02em;
-  margin: 0 0 var(--s-2);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-heading);
+  font-weight: 800;
+  letter-spacing: var(--ls-tight);
+  margin: 0 0 var(--s-4);
   color: var(--text);
   display: flex;
   align-items: center;
@@ -357,9 +385,10 @@ h1 {
 }
 h1 .grad { color: var(--lime); }
 h2 {
-  font-size: clamp(15px, 3.2vw, 18px);
-  line-height: 1.3;
-  font-weight: 600;
+  font-size: var(--fs-h2);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: var(--ls-snug);
   margin: 0 0 var(--s-3);
   color: var(--text);
   display: flex;
@@ -367,14 +396,59 @@ h2 {
   gap: var(--s-2);
   flex-wrap: wrap;
 }
-h2 .ico { color: var(--lime); }
-h3 { font-size: 15px; font-weight: 600; margin: 0 0 var(--s-2); color: var(--text); }
+h2 .ico { color: var(--lime); width: 20px; height: 20px; }
+h3 {
+  font-size: var(--fs-h3);
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -.005em;
+  margin: 0 0 var(--s-2);
+  color: var(--text);
+}
+/* Heading yang muncul di TENGAH kartu (bukan judul kartu) bernapas lebih lega */
+.card > h2:not(:first-child) { margin-top: var(--s-6); }
 
-p { color: var(--text-body); }
-.sub { color: var(--muted); margin: 0 0 var(--s-6); font-size: 14px; }
+/* Paragraf: jarak bawah seragam 12px (menyeragamkan margin default browser
+   yang selama ini bikin ritme antar-seksi tidak konsisten) */
+p {
+  color: var(--text-body);
+  margin: 0 0 var(--s-3);
+  line-height: var(--lh-body);
+}
+/* Measure nyaman: paragraf langsung di dalam kartu maksimal 72ch */
+.card > p { max-width: var(--measure); }
+
+/* Lead / intro: sedikit LEBIH BESAR dari body untuk menarik mata pertama kali */
+.lead {
+  font-size: var(--fs-lead);
+  line-height: 1.6;
+  color: var(--text-body);
+}
+/* Subjudul halaman (di bawah H1) */
+.sub {
+  color: var(--text-body);
+  margin: 0 0 var(--s-6);
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: var(--measure-wide);
+}
 .muted { color: var(--muted); }
 .mono { font-family: var(--mono); font-size: 13px; word-break: break-word; }
-strong, b { color: var(--text); }
+/* Kata kunci di dalam paragraf harus MENONJOL dari teks di sekitarnya */
+strong, b { color: var(--text); font-weight: 700; }
+
+/* Blok prosa di luar kartu tetap terkendali lebarnya */
+.prose { max-width: var(--measure-wide); }
+
+/* Kepala seksi beranda: eyebrow + judul seksi (H2) sebelum grid fitur */
+.section-head { margin: var(--s-8) 0 0; }
+.section-head + .features-grid { margin-top: var(--s-4); }
+
+/* Font body desktop sedikit dibesarkan agar nyaman di layar lebar;
+   mobile tetap 15px (elemen UI padat). */
+@media (min-width: 900px) {
+  body { font-size: 15.5px; }
+}
 
 /* Label seksi bergaya "// komentar" ala terminal */
 .eyebrow {
@@ -727,8 +801,8 @@ td b, td strong { color: var(--text); }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; animation: fadeUp var(--t) var(--ease) both; }
 
-.steps { margin: 0; padding-left: var(--s-5); }
-.steps li { margin-bottom: var(--s-2); line-height: 1.6; color: var(--text-body); }
+.steps { margin: 0; padding-left: var(--s-5); max-width: var(--measure-wide); }
+.steps li { margin-bottom: var(--s-3); line-height: 1.62; color: var(--text-body); }
 .steps li:last-child { margin-bottom: 0; }
 
 kbd {
@@ -798,7 +872,11 @@ pre:hover { border-color: var(--border-2); }
    ============================================================== */
 .mt-3 { margin-top: var(--s-3); }
 .mt-4 { margin-top: var(--s-4); }
+.mt-5 { margin-top: var(--s-5); }
+.mt-6 { margin-top: var(--s-6); }
 .mb-4 { margin-bottom: var(--s-4); }
+.mb-5 { margin-bottom: var(--s-5); }
+.mb-6 { margin-bottom: var(--s-6); }
 .w-full { width: 100%; }
 .grid-2 { display: grid; grid-template-columns: 1fr; gap: var(--s-4); }
 @media (min-width: 641px) { .grid-2 { grid-template-columns: 2fr 1fr; } }
@@ -832,10 +910,11 @@ pre:hover { border-color: var(--border-2); }
   margin-bottom: var(--s-5);
 }
 .hero-kicker .dot { width: 6px; height: 6px; }
-.hero h1 { font-size: clamp(26px, 6vw, 46px); display: block; }
+.hero h1 { font-size: clamp(28px, 6.5vw, 48px); display: block; letter-spacing: var(--ls-tight); }
 .hero h1 .line { display: block; }
 .hero h1 .hl { color: var(--lime); }
-.hero-sub { font-size: clamp(14px, 3vw, 16px); color: var(--text-body); max-width: 620px; margin: var(--s-4) 0 var(--s-6); }
+/* Lead hero: lebih besar dari body (bukan lebih kecil) agar mata mendarat di sini dulu */
+.hero-sub { font-size: var(--fs-lead); line-height: 1.6; color: var(--text-body); max-width: 640px; margin: var(--s-4) 0 var(--s-6); }
 
 /* Kotak "live tokens" — angka besar, monospace, dengan kursor berkedip */
 .live-box {
@@ -863,7 +942,7 @@ pre:hover { border-color: var(--border-2); }
 .feature { border-top: 1px solid var(--border); padding-top: var(--s-4); }
 .feature .no { font-family: var(--mono); font-size: 12px; color: var(--lime); margin-bottom: var(--s-2); }
 .feature h3 { margin-bottom: var(--s-2); }
-.feature p { font-size: 13.5px; margin: 0; }
+.feature p { font-size: 14px; line-height: 1.62; margin: 0; max-width: var(--measure); }
 .features-grid { display: grid; grid-template-columns: 1fr; gap: var(--s-5); margin-top: var(--s-5); }
 @media (min-width: 640px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 1024px) { .features-grid { grid-template-columns: repeat(5, 1fr); } }
@@ -1626,7 +1705,7 @@ img, svg { max-width: 100%; height: auto; }
   body { font-size: 14.5px; }
   .brand .suffix { display: none; }          /* sembunyikan "· Admin" agar tidak berdesakan */
   .stat .v { font-size: 18px; }
-  .hero h1 { font-size: 24px; }
+  .hero h1 { font-size: 26px; }
   .dash-head { gap: var(--s-2); }
   .dash-avatar { width: 44px; height: 44px; font-size: 18px; }
   .notfound-code { font-size: 64px; }
