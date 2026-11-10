@@ -1596,19 +1596,22 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   height: calc(2 * var(--orbit-r) + 60px);
   flex-shrink: 0;
 }
-/* Cahaya pusat */
+/* Cahaya pusat — diterangkan dari .12 ke .20 (permintaan pemilik: orbit
+   terlalu redup / nyaris tak kelihatan di latar #0a0a0a). */
 .orbit::before {
   content: "";
   position: absolute;
   inset: 26%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(163, 230, 53, .12), transparent 70%);
+  background: radial-gradient(circle, rgba(163, 230, 53, .20), transparent 74%);
   pointer-events: none;
 }
 .orbit-ring {
   position: absolute;
   inset: 0;
-  border: 1px dashed var(--border);
+  /* Dulu var(--border) #1e1e1e — kontras ~1.15:1 di latar #0a0a0a, cincin
+     "hilang". Kini garis lime lembut .26: jelas terlihat tapi tetap latar. */
+  border: 1px dashed rgba(163, 230, 53, .26);
   border-radius: 50%;
   animation: orbit-cw 44s linear infinite;
   /* PENTING: JANGAN menaruh `transform` statis di sini. Gaya dasar apa pun
@@ -1621,7 +1624,7 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 }
 .orbit-ring.rev {
   inset: 15%;
-  border-color: rgba(163, 230, 53, .14);
+  border-color: rgba(163, 230, 53, .34);
   animation: orbit-ccw 34s linear infinite;
 }
 /* Inti: logo ThorHub */
@@ -1636,7 +1639,7 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   border: 1px solid var(--border-2);
   border-radius: var(--radius);
   z-index: 2;
-  box-shadow: 0 0 0 6px rgba(163, 230, 53, .05);
+  box-shadow: 0 0 0 6px rgba(163, 230, 53, .12);
 }
 .orbit-core img { width: 38px; height: 38px; display: block; }
 
