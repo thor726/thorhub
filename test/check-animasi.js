@@ -64,7 +64,8 @@ cek("menangani elemen dinamis (MutationObserver)", /MutationObserver/.test(js));
 console.log("\n=== 5. muncul.js terpasang di setiap halaman ===");
 for (const f of ["index.html", "docs.html", "portal.html", "admin.html", "login-admin.html", "login-member.html", "404.html"]) {
   const h = read(f);
-  cek(f + " memuat /muncul.js", /<script[^>]+src="\/muncul\.js"/.test(h));
+  // Query cache-busting (?v=…) diizinkan — yang diuji hanya kehadiran modulnya.
+  cek(f + " memuat /muncul.js", /<script[^>]+src="\/muncul\.js(\?[^"]*)?"/.test(h));
 }
 
 console.log("\n=== HASIL ===");

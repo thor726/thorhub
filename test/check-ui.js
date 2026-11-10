@@ -113,7 +113,8 @@ console.log("\n=== 7. Latar ThorHub dipasang lewat bg.js (satu sumber) ===");
 
   for (const { html } of pairs) {
     const h = read(html);
-    const adaScript = /<script[^>]+src="\/bg\.js"/.test(h);
+    // Query cache-busting (?v=…) diizinkan — yang diuji hanya kehadiran modulnya.
+    const adaScript = /<script[^>]+src="\/bg\.js(\?[^"]*)?"/.test(h);
     const adaClass = /<body class="cc-bg"/.test(h);
     const sisaAurora = /cc-aurora|aurora-/i.test(h);
     const ok = adaScript && adaClass && !sisaAurora;

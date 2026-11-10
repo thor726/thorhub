@@ -15,31 +15,41 @@
  *                 di margin kiri & kanan.
  *
  * SIMETRI (permintaan langsung pemilik produk)
- *   Seluruh komposisi dibuat CERMIN SEMPURNA terhadap garis tengah x = 1000
+ *   Seluruh komposisi dibuat CERMIN SEMPURNA terhadap garis tengah x = 1400
  *   (paruh kiri dicerminkan ke paruh kanan), supaya tampilan terasa "di tengah"
  *   dan tidak berat sebelah:
- *     • Jaringan : simpul hanya digenerate di paruh kiri (x ≤ 900) lalu setiap
- *                  simpul dicerminkan ke x' = 2000 − x. Karena aturan penghubung
+ *     • Jaringan : simpul hanya digenerate di paruh kiri (x ≤ 1220) lalu setiap
+ *                  simpul dicerminkan ke x' = 2800 − x. Karena aturan penghubung
  *                  juga simetris, garis penghubungnya ikut simetris otomatis.
- *     • Halo     : ketiga busur berpusat tepat di x = 1000.
+ *     • Halo     : ketiga busur berpusat tepat di x = 1400.
  *     • Kilat    : jalur kanan adalah cerminan jalur kiri (dijaga manual, lihat
  *                  buatKilat()).
- *     • Grid     : kisi seragam 100px pada 2000px → selalu simetris.
+ *     • Grid     : kisi seragam 100px pada 2800px → selalu simetris.
  *   Uji otomatis test/check-bg.js MEMBUKTIKAN simetri ini (tiap simpul harus
  *   punya pasangan cermin).
  *
- * ATURAN TATA LETAK (diukur untuk viewBox 2000×1250)
+ * ATURAN TATA LETAK (diukur untuk viewBox 2800×1600)
  *   preserveAspectRatio "xMidYMid slice" ⇒ layar lebar memotong atas-bawah,
- *   layar sempit (HP) memotong KIRI-KANAN ke pita tengah x ≈ 669–1331. Karena
+ *   layar sempit (HP) memotong KIRI-KANAN ke pita tengah x ≈ 1030–1770. Karena
  *   itu tidak ada elemen struktural di luar pita bawah/tengah, dan pemotongan
  *   itu sendiri tetap simetris karena sumbu potongnya titik tengah.
- *   PERKECILAN ZOOM (permintaan pemilik: "background terlalu ngezoom"):
- *   kanvas logis diperbesar 1600×1000 → 2000×1250 (faktor 1,25) TANPA
- *   mengubah ukuran elemen (kisi 100px, radius simpul, jarak penghubung).
- *   Karena slice menskalakan viewBox ke layar, hasil akhirnya seluruh pola
- *   tampak ±20% lebih kecil dan 25% lebih banyak tekstur terlihat — di
- *   desktop maupun HP. Simpul jaringan ditambah 14 → 22 pasang agar
- *   DENSITAS tetap sama (bukan jadi kosong).
+ *   Kilat sengaja di margin tepi (x < 250 dan x > 2550) sehingga pada desktop
+ *   selalu di luar kolom konten (wrap maks 1200px, mulai x ≈ 360).
+ *
+ * SKALA KANVAS ADAPTIF — satu skala untuk SEMUA layar (permintaan pemilik:
+ *   "background masih ngezoom banget")
+ *   Akar masalahnya: preserveAspectRatio "slice" membuat skala bergantung
+ *   layar — kanvas tetap 2800×1600 menghasilkan grid 58px di HP, 73px di
+ *   1920×1080, bahkan 95px di 2560×1440 (makin lebar makin "ngezoom").
+ *   Solusinya: bg.js MENGUKUR layar saat muat lalu memilih kanvas sehingga
+ *   skala max(elemW/W, elemH/H) selalu ≤ 0.55 → grid 100px kanvas TAMPIL
+ *   ±55px di layar mana pun (HP, laptop, desktop, ultrawide), dan komposisi
+ *   tidak pernah "memotong" lebih dari perlu. Ukuran logis elemen (kilat,
+ *   simpul, radius halo, lampu) tetap; yang berubah hanya luas kanvas +
+ *   jumlah simpul mengikuti luas (kerapatan per layar tetap).
+ *   Kanvas wajib kelipatan 400: grid 100px & garis utama tiap 400px harus
+ *   menyentuh kedua tepi secara simetris (uji check-bg.js membuktikannya
+ *   untuk 4 ukuran layar sekaligus).
  *
  * MENGAPA DIPISAH KE BERKAS SENDIRI
  *   Satu sumber kebenaran: halaman cukup memuat <script src="/bg.js"></script>.
@@ -55,10 +65,42 @@
 
   var NS = "http://www.w3.org/2000/svg";
 
-  // Kanvas logis latar. Semua koordinat di bawah memakai satuan ini.
-  var W = 2000;
-  var H = 1250;
-  var TENGAH = W / 2; // 1000 — sumbu cermin seluruh komposisi
+  /* Kanvas logis latar — ADAPTIF terhadap layar (lihat komentar besar di atas).
+     • SKALA_TARGET 0.55 ⇒ grid 100px tampil ±55px di layar mana pun.
+     • Buffer 80px mengikuti CSS (inset −40px + width 100%+80px).
+     • Dibulatkan ke ATAS ke kelipatan 400 agar grid & garis utama menyentuh
+       kedua tepi secara simetris.
+     • Klem [1600..6400]×[1200..2800]: batas bawah menjaga tekstur tetap
+       terlihat di layar kecil, batas atas menjaga jumlah simpul & berkas SVG
+       tetap ringan pada layar super-ultrawide.
+     • Di Node (uji check-bg.js) document tak ada — global.CC_UJI_LAYAR berisi
+       UKURAN LAYAR [vw, vh] yang mau diuji; bg.js memilih kanvasnya sendiri
+       lewat pilihKanvas() — jalur yang SAMA PERSIS dengan produksi — lalu
+       mencatat hasilnya di global.CC_UJI_KANVAS agar uji memverifikasi skala. */
+  var SKALA_TARGET = 0.55;
+  function kelipatan400(n) { return Math.ceil(n / 400) * 400; }
+  function pilihKanvas(vw, vh) {
+    var ew = vw + 80, eh = vh + 80; // ukuran elemen SVG menurut CSS
+    var w = kelipatan400(ew / SKALA_TARGET);
+    var h = kelipatan400(eh / SKALA_TARGET);
+    w = Math.min(6400, Math.max(1600, w));
+    h = Math.min(2800, Math.max(1200, h));
+    return [w, h];
+  }
+  var UJI = (typeof globalThis !== "undefined" && globalThis.CC_UJI_LAYAR) || null;
+  var W, H;
+  if (UJI) {
+    var kUji = pilihKanvas(UJI[0], UJI[1]);
+    W = kUji[0]; H = kUji[1];
+    globalThis.CC_UJI_KANVAS = [W, H]; // catat pilihan kanvas untuk uji
+  }
+  else if (typeof document !== "undefined") {
+    var _vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+    var _vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+    W = pilihKanvas(_vw, _vh)[0];
+    H = pilihKanvas(_vw, _vh)[1];
+  } else { W = 2800; H = 1600; }
+  var TENGAH = W / 2; // sumbu cermin seluruh komposisi (selalu kelipatan 200)
 
   /* ------------------------------------------------------------------ *
    *  Utilitas
@@ -89,8 +131,8 @@
    * Rumus ini SAMA PERSIS dengan <radialGradient id="ccbg-pudar"> yang dipakai
    * <mask> grup grid & jaringan: cx=50% cy=45% r=72%, stop 0→1, 60%→.55,
    * 100%→0. Karena gradientUnits-nya objectBoundingBox dan dipasang pada
-   * <rect 2000×1250>, lingkaran satuan itu terentang jadi ELIPS berpusat
-   * (1000, 562) dengan rx = .72×2000 = 1440 dan ry = .72×1250 = 900.
+   * <rect 2800×1600>, lingkaran satuan itu terentang jadi ELIPS berpusat
+   * (1400, 720) dengan rx = .72×2800 = 2016 dan ry = .72×1600 = 1152.
    *
    * MENGAPA DIRUMUSKAN, BUKAN DISERAHKAN KE <mask> SAJA
    *   Uji A/B terukur di Chromium (1440px): grup yang memakai <mask> SEKALIGUS
@@ -101,6 +143,9 @@
    *   (opasitas total = pudar(x,y) × opasitas kelas, sama seperti sebelumnya).
    *   Simpul DIAM tetap di dalam grup ber-mask: grup ber-mask TANPA animasi
    *   terbukti tidak membebani.
+   *
+   *   Rumus PARAMETRIK terhadap W×H (mengikuti rect <mask> apa pun ukurannya):
+   *   elips pusat (W/2, 0.45H), rx = 0.72W, ry = 0.72H.
    */
   var PUDAR_STOP = [[0, 1], [0.6, 0.55], [1, 0]];
   function pudar(x, y) {
@@ -137,12 +182,12 @@
    * ------------------------------------------------------------------ */
 
   /**
-   * Sebar 22 titik di PARUH KIRI (sumbu x 100..900) lalu cerminkan ke paruh
-   * kanan → 44 simpul yang simetris sempurna terhadap x = 1000.
+   * Sebar simpul di PARUH KIRI lalu cerminkan ke paruh kanan → komposisinya
+   * simetris sempurna terhadap x = W/2.
    *
-   * Jumlah dinaikkan 14 → 22 mengikuti perbesaran kanvas (1600×1000 →
-   * 2000×1250) supaya DENSITAS jaringan per piksel layar tetap sama —
-   * kanvas dibesarkan hanya untuk memperkecil tampilan (anti "ngezoom").
+   * Jumlah mengikuti LUAS kanvas (1 pasang dasar per ±120 ribu unit² — di
+   * kanvas 2800×1600 hasilnya 38 pasang, sama seperti desain sebelumnya) agar
+   * KERAPATAN jaringan per layar tetap di semua ukuran kanvas adaptif.
    *
    * Catatan jarak: tolakan minimum diperiksa terhadap SEMUA simpul yang sudah
    * ada — termasuk hasil cerminannya sendiri — supaya cerminan tidak menempel
@@ -152,14 +197,14 @@
     var r = acak(20261108);
     var titik = []; // berisi { x, y, aktif, tunda }
     var putar = 0;
-    var MAKS_DASAR = 22;
-    var R_MIN = 138; // tolakan minimum antar simpul (tetap — ikut memperkecil tampilan)
+    var MAKS_DASAR = Math.min(150, Math.max(24, Math.round((W * H) / 120000)));
+    var R_MIN = 138; // tolakan minimum antar simpul
     var dasar = 0;
 
-    while (dasar < MAKS_DASAR && putar++ < 20000) {
-      var x = 100 + r() * 800;             // 100 .. 900  (cermin: 1100 .. 1900)
-      var y = 90 + r() * (H - 200);        // 90 .. 1140
-      var mx = W - x;                      // cerminan terhadap x = 1000
+    while (dasar < MAKS_DASAR && putar++ < 90000) {
+      var x = W * 0.05 + r() * W * 0.386;  // margin kiri .. sebelum garis tengah
+      var y = H * 0.09 + r() * H * 0.82;   // 9% .. 91% tinggi kanvas
+      var mx = W - x;                      // cerminan terhadap x = W/2
 
       // Tolak bila terlalu dekat dengan simpul mana pun (atau cerminannya).
       var bebas = jarak2(x, y, mx, y) > R_MIN * R_MIN; // jangan menempel cerminnya
@@ -222,13 +267,15 @@
    * ------------------------------------------------------------------ */
 
   /**
-   * Busur halo di cakrawala BAWAH, berpusat TEPAT di x = 1000 (simetris).
-   * Pusatnya sengaja di bawah kanvas (y = 1430) sehingga hanya busur atas yang
-   * terlihat — seperti pendar cakrawala. Ketiganya berputar pelan (satu grup).
+   * Busur halo di cakrawala BAWAH, berpusat TEPAT di x = W/2 (simetris).
+   * Pusatnya sengaja di bawah kanvas (y = H+180) sehingga hanya busur atas
+   * yang terlihat — seperti pendar cakrawala. Radius TIDAK digandakan bersama
+   * kanvas: busur tampil lebih kecil & lebih rendah di layar (efek "perkecil
+   * zoom" yang diminta). Ketiganya berputar pelan (satu grup).
    */
   function buatHalo() {
     var isi = "";
-    var radius = [475, 588, 700]; // proporsional dengan kanvas 2000×1250
+    var radius = [380, 470, 560];
     for (var i = 0; i < radius.length; i++) {
       isi += '<circle class="ccbg-halo-arc ccbg-halo-' + (i + 1) +
              '" cx="' + TENGAH + '" cy="' + (H + 180) + '" r="' + radius[i] + '"/>';
@@ -238,18 +285,28 @@
 
   /**
    * Dua kilat ("Thor") di margin tepi bawah — jalur KANAN adalah cerminan
-   * jalur KIRI terhadap x = 1000 (dijaga manual, tanpa loop, supaya bentuknya
-   * mudah dibaca & disesuaikan). Sengaja ditarik cukup rendah (y ≥ 775) agar
-   * pada layar pendek tidak menyentuh zona hero. Disembunyikan CSS < 900px.
+   * jalur KIRI terhadap x = W/2 (dihitung dari jalur kiri, supaya simetri
+   * terjamin untuk kanvas adaptif ukuran apa pun). Bentuk & ukuran logis
+   * TIDAK berubah dari desain awal (agar tampak lebih kecil di layar);
+   * posisi y mengikuti pita bawah kanvas (H−608 … H−218).
+   * Disembunyikan CSS < 900px.
    */
   function buatKilat() {
+    // Jalur kiri relatif: x 128..246, y 0..390 (lalu digeser ke pita bawah)
+    var y0 = H - 608; // 992 pada kanvas 1600 — pita bawah kanvas
+    function jalur(p, geser) {
+      var titik = p.map(function (q) { return [q[0] + geser, q[1] + y0]; });
+      return "M" + titik.map(function (q) { return q[0] + " " + q[1]; }).join(" L ");
+    }
+    var kiri = [[186, 0], [138, 142], [182, 150], [128, 280], [176, 288], [132, 390]];
+    var cabangKiri = [[182, 150], [232, 192], [204, 206], [246, 246]];
+    // Cermin: x' = W − x
+    function cermin(p) { return p.map(function (q) { return [W - q[0], q[1]]; }); }
     return '' +
-      // KIRI (x ≈ 128–246, di luar tepi kiri kolom konten)
-      '<path class="ccbg-kilat" d="M186 775 L138 953 L182 963 L128 1125 L176 1135 L132 1263"/>' +
-      '<path class="ccbg-kilat-cabang" d="M182 963 L232 1015 L204 1033 L246 1083"/>' +
-      // KANAN — cermin tepat dari yang kiri (x' = 2000 − x)
-      '<path class="ccbg-kilat" d="M1814 775 L1862 953 L1818 963 L1872 1125 L1824 1135 L1868 1263"/>' +
-      '<path class="ccbg-kilat-cabang" d="M1818 963 L1768 1015 L1796 1033 L1754 1083"/>';
+      '<path class="ccbg-kilat" d="' + jalur(kiri, 0) + '"/>' +
+      '<path class="ccbg-kilat-cabang" d="' + jalur(cabangKiri, 0) + '"/>' +
+      '<path class="ccbg-kilat" d="' + jalur(cermin(kiri), 0) + '"/>' +
+      '<path class="ccbg-kilat-cabang" d="' + jalur(cermin(cabangKiri), 0) + '"/>';
   }
 
   /* ------------------------------------------------------------------ *
@@ -258,9 +315,9 @@
 
   /**
    * Pasangan titik cahaya yang BERKEDIP seperti lampu penanda jaringan.
-   * Diletakkan simetris terhadap x = 1000 (memenuhi prinsip simetri latar):
-   *   kiri  (375,175) (650,375) (312,775)
-   *   kanan (1625,175)(1350,375)(1688,775)
+   * Diletakkan simetris terhadap x = W/2 (memenuhi prinsip simetri latar);
+   * posisi mengikuti proporsi kanvas adaptif: x 18.75%/32.5%/15.6% lebar,
+   * y 15.3%/32.8%/67.8% tinggi (sama dengan titik lama pada kanvas 2800×1600).
    * Tiap titik memakai jeda animasi berbeda supaya tidak berkedip serempak
    * (efek kedip yang organik), tetapi pasangan cerminnya memakai jeda SAMA
    * agar kiri-kanan tetap sealun.
@@ -270,14 +327,14 @@
    */
   function buatKedip() {
     var pola = [
-      { x: 375, y: 175, tunda: "0s" },
-      { x: 650, y: 375, tunda: "1.1s" },
-      { x: 312, y: 775, tunda: "2.3s" },
+      { x: Math.round(W * 0.1875), y: Math.round(H * 0.153), tunda: "0s" },
+      { x: Math.round(W * 0.325),  y: Math.round(H * 0.328), tunda: "1.1s" },
+      { x: Math.round(W * 0.156),  y: Math.round(H * 0.678), tunda: "2.3s" },
     ];
     var isi = "";
     for (var i = 0; i < pola.length; i++) {
       var p = pola[i];
-      var mx = W - p.x; // cermin terhadap x = 1000 (otomatis simetris)
+      var mx = W - p.x; // cermin terhadap x = W/2 (otomatis simetris)
       isi += '<circle class="ccbg-lampu" cx="' + p.x + '" cy="' + p.y +
              '" r="2.6" style="animation-delay:' + p.tunda + '"/>';
       isi += '<circle class="ccbg-lampu-halo" cx="' + p.x + '" cy="' + p.y +
@@ -337,8 +394,8 @@
 
       // --- Lapis 1: cahaya ---
       '<g class="ccbg-cahaya">' +
-        '<ellipse class="ccbg-cahaya-atas" cx="' + TENGAH + '" cy="-150" rx="1100" ry="525" fill="url(#ccbg-cahaya-atas)"/>' +
-        '<ellipse class="ccbg-cahaya-bawah" cx="' + TENGAH + '" cy="' + (H + 180) + '" rx="1125" ry="525" fill="url(#ccbg-cahaya-bawah)"/>' +
+        '<ellipse class="ccbg-cahaya-atas" cx="' + TENGAH + '" cy="-120" rx="880" ry="420" fill="url(#ccbg-cahaya-atas)"/>' +
+        '<ellipse class="ccbg-cahaya-bawah" cx="' + TENGAH + '" cy="' + (H + 180) + '" rx="900" ry="420" fill="url(#ccbg-cahaya-bawah)"/>' +
       "</g>" +
 
       // --- Lapis 2: grid ---

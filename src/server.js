@@ -124,10 +124,12 @@ app.get("/beli", (_req, res) => {
 // Semua slug melayani HALAMAN yang sama (panel tetap satu file HTML); yang
 // berbeda hanya path URL-nya, sehingga tiap tab/tahap bisa di-bookmark,
 // dibagikan, dan tombol Kembali browser berperilaku wajar:
-//   /portal/topup  /portal/pesanan  /portal/pemakaian  /portal/model  /portal/log
-//   /admin/aktivitas  /admin/model  /admin/toko
+//   /portal/integrasi  /portal/topup  /portal/pesanan  /portal/pemakaian
+//   /portal/model  /portal/log  —  /portal/lacak/<kode> (modal pelacakan)
+//   /admin/kelola  /admin/aktivitas  /admin/model  /admin/toko
+//   —  /admin/pesanan/<kode> (modal detail pesanan)
 //   /docs/mulai  /docs/sdk  /docs/aplikasi  /docs/referensi
-//   /beli/topup  /beli/pembayaran?order=…  /beli/selesai?order=…  (checkout = /beli)
+//   /beli/checkout  /beli/topup  /beli/pembayaran?order=…  /beli/selesai?order=…
 // Slug tidak dikenal → halaman 404 (bukan respons JSON API).
 // Catatan urutan: alias ini WAJIB terpasang sebelum router API di bawah,
 // dan slug di `api:` adalah segmen pertama endpoint REST asli yang tidak
@@ -137,10 +139,10 @@ const HALAMAN_SLUG = {
   // "api:" = segmen pertama endpoint REST asli di bawah prefix ini (router
   // portal.js: /portal/member/*, /portal/admin/*, /portal/models) yang tidak
   // boleh ditimpa halaman. /portal/models penting: dipakai katalog docs.
-  portal: { berkas: "portal.html", slug: new Set(["topup", "pesanan", "pemakaian", "model", "log"]), api: new Set(["member", "admin", "models", "usage"]) },
-  admin: { berkas: "admin.html", slug: new Set(["aktivitas", "model", "toko"]), api: new Set(["keys", "usage"]) },
+  portal: { berkas: "portal.html", slug: new Set(["integrasi", "topup", "pesanan", "pemakaian", "model", "log"]), api: new Set(["member", "admin", "models", "usage"]) },
+  admin: { berkas: "admin.html", slug: new Set(["kelola", "aktivitas", "model", "toko"]), api: new Set(["keys", "usage"]) },
   docs: { berkas: "docs.html", slug: new Set(["mulai", "sdk", "aplikasi", "referensi"]), api: new Set() },
-  beli: { berkas: "beli.html", slug: new Set(["topup", "pembayaran", "selesai"]), api: new Set() },
+  beli: { berkas: "beli.html", slug: new Set(["checkout", "topup", "pembayaran", "selesai"]), api: new Set() },
 };
 for (const [awalan, hal] of Object.entries(HALAMAN_SLUG)) {
   app.get(`/${awalan}/:slug`, (req, res, next) => {
@@ -154,6 +156,18 @@ for (const [awalan, hal] of Object.entries(HALAMAN_SLUG)) {
     });
   });
 }
+
+// Modal pelacakan/detail dua segmen — URL langsung ke satu pesanan:
+//   /portal/lacak/THX-…  → portal member, modal Lacak Pesanan
+//   /admin/pesanan/THX-… → panel admin, modal detail pesanan
+// Dipasang SETELAH loop :slug di atas (yang akan menangkap /portal/lacak
+// tanpa kode) — dengan :kode di sini rute dua segmen lebih spesifik.
+const KIRIM_PORTAL_HTML = (_req, res) => res.sendFile(path.join(PUBLIC_DIR, HALAMAN_SLUG.portal.berkas));
+const KIRIM_ADMIN_HTML = (_req, res) => res.sendFile(path.join(PUBLIC_DIR, HALAMAN_SLUG.admin.berkas));
+app.get("/portal/lacak/:kode", KIRIM_PORTAL_HTML);
+app.get("/admin/pesanan/:kode", KIRIM_ADMIN_HTML);
+app.get("/portal/lacak", (_req, res) => res.redirect("/portal/pesanan"));
+app.get("/admin/pesanan", (_req, res) => res.redirect("/admin/toko"));
 
 // Log ringkas setiap request
 app.use((req, _res, next) => {

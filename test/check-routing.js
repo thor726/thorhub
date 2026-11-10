@@ -9,6 +9,8 @@ const { chromium } = require("playwright");
 
 const BASE = "http://127.0.0.1:3000";
 require("dotenv").config({ path: "/home/z/my-project/llm-proxy-gateway/.env" });
+const crypto = require("crypto");
+const db = require("../src/db");
 const TEST_KEY = "sk-thor-5cdc4026cc623ec41fcaa61f8e7fb54683b00b88aa9335f7";
 const ADMIN_PASS = process.env.ADMIN_PASSWORD || "";
 
@@ -131,6 +133,56 @@ function cek(nama, kondisi, detail = "") {
   await page.waitForTimeout(300);
   cek("/beli/topup → mode top-up terpilih",
     await page.evaluate(() => document.getElementById("mode-topup").classList.contains("active")));
+
+  /* ============ 5b. DEEP-LINK DUA SEGMEN ============ */
+  console.log("[5b] Deep-link dua segmen — modal via URL");
+  // Suntik satu pesanan uji milik member yang sedang login, lalu buka URL
+  // langsung: /portal/lacak/<kode> dan /admin/pesanan/<kode>.
+  const me = await page.evaluate(() =>
+    fetch("/portal/member/me", { credentials: "same-origin" })
+      .then((r) => r.json()).then((j) => j.data.user_name));
+  const kodeDl = "THX-DLINK" + crypto.randomBytes(2).toString("hex").toUpperCase();
+  const expDl = new Date(Date.now() + 864e5).toISOString();
+  const infoDl = db
+    .prepare(
+      "INSERT INTO orders (order_code, access_token, mode, package_id, quota_tokens, user_name, email, whatsapp, target_api_key, api_key_issued, base_amount, unique_code, amount_to_pay, payment_method, status, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    .run(kodeDl, "tok-dl", "topup", "20m", 20_000_000, me, "", "", TEST_KEY, "", 16_000, 777, 16_777, "QRIS DANA", "COMPLETED", expDl);
+  try {
+    // Portal: URL langsung membuka tab pesanan + modal pelacakan
+    await page.goto(BASE + "/portal/lacak/" + kodeDl, { waitUntil: "networkidle" });
+    await page.waitForSelector("#panel:not(.hidden)", { timeout: 15000 });
+    await page.waitForTimeout(700);
+    const judulTrk = await page.evaluate(() => document.getElementById("trk-judul")?.textContent || "");
+    cek("/portal/lacak/<kode> → modal terbuka + judul memuat kode",
+      (await page.evaluate(() => !document.getElementById("modal-lacak").classList.contains("hidden"))) &&
+        judulTrk.includes(kodeDl),
+      `judul=${judulTrk}`);
+    cek("tab pesanan ikut aktif", (await tabAktifPortal()) === "pesanan", `tab=${await tabAktifPortal()}`);
+
+    // Tutup modal → URL dirapikan ke daftar pesanan
+    await page.click("#trk-tutup");
+    await page.waitForTimeout(300);
+    cek("tutup modal → URL jadi /portal/pesanan",
+      new URL(page.url()).pathname === "/portal/pesanan", page.url());
+
+    // Admin: URL langsung membuka modal detail pesanan
+    await page.goto(BASE + "/admin/pesanan/" + kodeDl, { waitUntil: "networkidle" });
+    await page.waitForSelector("#panel:not(.hidden)", { timeout: 15000 });
+    await page.waitForTimeout(700);
+    const judulAdm = await page.evaluate(() => document.getElementById("modal-title")?.textContent || "");
+    cek("/admin/pesanan/<kode> → modal detail terbuka",
+      (await page.evaluate(() => !document.getElementById("modal").classList.contains("hidden"))) &&
+        judulAdm.includes(kodeDl),
+      `judul=${judulAdm}`);
+    await page.click("#modal-close");
+    await page.waitForTimeout(300);
+    cek("tutup modal → URL jadi /admin/toko",
+      new URL(page.url()).pathname === "/admin/toko", page.url());
+  } finally {
+    db.prepare("DELETE FROM order_events WHERE order_id = ?").run(infoDl.lastInsertRowid);
+    db.prepare("DELETE FROM orders WHERE order_code = ?").run(kodeDl);
+  }
 
   /* ============ 6. API TIDAK TERTIMPA & SLUG TAK DIKENAL ============ */
   console.log("[6] Batasan rute");

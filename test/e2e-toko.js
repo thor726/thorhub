@@ -14,7 +14,9 @@
 process.env.MASTER_API_KEY = process.env.MASTER_API_KEY || "test-master-key";
 process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "test123";
 process.env.ADMIN_API_KEY = process.env.ADMIN_API_KEY || "test-admin-key";
-process.env.PORT = "0"; // port acak
+// Port acak tinggi — intOr() menolak "0" (0 bukan > 0), jadi PORT=0 akan
+// jatuh ke 3000 dan bentrok dengan gateway yang sedang berjalan.
+process.env.PORT = String(30000 + Math.floor(Math.random() * 20000));
 
 const { spawn } = require("child_process");
 const path = require("path");

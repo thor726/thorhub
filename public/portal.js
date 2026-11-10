@@ -147,6 +147,16 @@ async function boot() {
   if (slugAwal === "pesanan") bacaFilterPesananDariUrl();
   breadcrumbTabAktif();
 
+  // Deep-link dua segmen /portal/lacak/<kode> — URL langsung ke satu pesanan
+  // (dipakai tombol "Lacak" di notifikasi/riwayat yang bisa dibagikan):
+  // buka tab pesanan lalu tampilkan modal pelacakan untuk kode tersebut.
+  const mLacak = location.pathname.match(/^\/portal\/lacak\/([^/]+)\/?$/i);
+  if (mLacak) {
+    aktifkanTab("pesanan");
+    breadcrumbTabAktif();
+    bukaLacak(decodeURIComponent(mLacak[1]));
+  }
+
   // Jadwalkan auto-logout saat sesi 2 jam habis (expires_at dari server).
   jadwalkanAutoLogout(d.expires_at);
 
@@ -1148,6 +1158,11 @@ function tutupLacak() {
   if (modal) {
     modal.classList.add("hidden");
     document.body.style.overflow = "";
+  }
+  // Tutup modal pada URL deep-link → kembali ke daftar pesanan agar URL
+  // mencerminkan kondisi layar (modal tertutup = halaman daftar).
+  if (location.pathname.startsWith("/portal/lacak/")) {
+    try { history.replaceState(null, "", "/portal/pesanan"); } catch { /* abaikan */ }
   }
 }
 

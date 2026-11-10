@@ -1,7 +1,16 @@
 /**
- * Uji cepat bg.js di Node tanpa browser: stubs DOM minimal, jalankan skrip,
- * lalu periksa SVG yang dihasilkan (jumlah elemen, tidak ada NaN/undefined,
- * id gradien & mask ada dan saling terhubung).
+ * Uji bg.js di Node tanpa browser — SEKARANG untuk KANVAS ADAPTIF.
+ *
+ * bg.js memilih ukuran kanvas berdasarkan layar (lihat komentar di bg.js).
+ * Uji ini menjalankan bg.js pada 4 UKURAN LAYAR representatif (HP, laptop,
+ * desktop 1920, ultrawide 2560) lewat global.CC_UJI_LAYAR — jalur yang sama
+ * persis dengan produksi — lalu memeriksa setiap hasil:
+ *   • viewBox benar & kelipatan 400 (grid menyentuh tepi simetris)
+ *   • skala slice ≤ 0.56 → grid 100px kanvas tampil ≤ ±56px di layar (anti "ngezoom")
+ *   • simetri cermin sempurna terhadap x = W/2 (simpul, penghubung, halo,
+ *     kilat, grid) — permintaan eksplisit pemilik produk
+ *   • tidak ada NaN/undefined, id <defs> ↔ url(#...) saling terhubung,
+ *     simpul berdenyut di luar grup ber-mask (performa FPS).
  */
 const fs = require("fs");
 const path = require("path");
@@ -9,221 +18,215 @@ const vm = require("vm");
 
 const kode = fs.readFileSync(path.join(__dirname, "..", "public", "bg.js"), "utf8");
 
-let svgDibuat = null;
-function buatEl(ns, tag) {
-  const el = {
-    tagName: tag,
-    attrs: {},
-    innerHTML: "",
-    setAttribute(k, v) { this.attrs[k] = String(v); },
-    getAttribute(k) { return this.attrs[k]; },
+let totalErr = 0;
+
+/* 4 ukuran layar representatif + skala target yang dijanjikan bg.js. */
+const LAYAR = [
+  ["HP 390×844", 390, 844],
+  ["laptop 1440×900", 1440, 900],
+  ["desktop 1920×1080", 1920, 1080],
+  ["ultrawide 2560×1440", 2560, 1440],
+];
+
+function jalankanBgmjs(vw, vh) {
+  let svgDibuat = null;
+  function buatEl(ns, tag) {
+    const el = {
+      tagName: tag,
+      attrs: {},
+      innerHTML: "",
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      getAttribute(k) { return this.attrs[k]; },
+    };
+    if (tag === "svg") svgDibuat = el;
+    return el;
+  }
+  const body = {
+    firstChild: { dummy: true },
+    insertBefore(node) { this.anak = node; },
   };
-  if (tag === "svg") svgDibuat = el;
-  return el;
-}
-
-const body = {
-  firstChild: { dummy: true },
-  insertBefore(node) { this.anak = node; },
-};
-
-const document = {
-  body,
-  createElementNS: buatEl,
-  querySelector: () => null,
-  addEventListener: () => {},
-};
-
-const ctx = vm.createContext({ document, window: {}, Math, console });
-
-let err = 0;
-const cek = (nama, ok, info = "") => {
-  console.log(`  ${ok ? "✓" : "✗"} ${nama}${info ? "  (" + info + ")" : ""}`);
-  if (!ok) err++;
-};
-
-try {
+  const doc = {
+    body,
+    documentElement: { clientWidth: vw, clientHeight: vh },
+    createElementNS: buatEl,
+    querySelector: () => null,
+    addEventListener: () => {},
+  };
+  const ctx = vm.createContext({
+    document: doc, window: { innerWidth: vw, innerHeight: vh },
+    Math, console, CC_UJI_LAYAR: [vw, vh],
+  });
   vm.runInContext(kode, ctx, { filename: "bg.js" });
-} catch (e) {
-  console.log("  ✗ bg.js melempar error:", e.message);
-  process.exit(1);
+  return { svg: svgDibuat, body, kanvas: ctx.CC_UJI_KANVAS };
 }
 
-console.log("=== bg.js — hasil render (Node, tanpa browser) ===");
-cek("SVG terbentuk", !!svgDibuat);
-cek("disisipkan sebagai anak pertama body", body.anak === svgDibuat);
+function ujiSatuLayar([nama, vw, vh]) {
+  console.log(`\n========== ${nama} ==========`);
+  let err = 0;
+  const cek = (label, ok, info = "") => {
+    console.log(`  ${ok ? "✓" : "✗"} ${label}${info ? "  (" + info + ")" : ""}`);
+    if (!ok) err++;
+  };
 
-const svg = svgDibuat.innerHTML;
-const attr = svgDibuat.attrs;
+  let svgDibuat, body, kanvas;
+  try {
+    ({ svg: svgDibuat, body, kanvas } = jalankanBgmjs(vw, vh));
+  } catch (e) {
+    cek("bg.js berjalan tanpa error", false, e.message);
+    totalErr += err;
+    return;
+  }
 
-cek("class = cc-bg-svg", attr.class === "cc-bg-svg");
-cek("aria-hidden = true", attr["aria-hidden"] === "true");
-cek("viewBox benar", attr.viewBox === "0 0 2000 1250", attr.viewBox);
-cek("preserveAspectRatio = slice", attr.preserveAspectRatio === "xMidYMid slice");
+  const W = kanvas[0], H = kanvas[1], TENGAH = W / 2;
+  console.log(`  kanvas terpilih: ${W}×${H}`);
 
-cek("tidak ada NaN", !/NaN/.test(svg));
-cek("tidak ada undefined", !/undefined/.test(svg));
+  cek("SVG terbentuk", !!svgDibuat);
+  cek("disisipkan sebagai anak pertama body", body.anak === svgDibuat);
 
-// Elemen struktural
-const hitung = (re) => (svg.match(re) || []).length;
-const garisGrid = hitung(/class="ccbg-garis/g);
-const simpul = hitung(/class="ccbg-simpul/g);
-const denyut = hitung(/ccbg-denyut/g);
-const halo = hitung(/class="ccbg-halo-arc/g);
-const kilat = hitung(/class="ccbg-kilat"/g);
-// Garis grid selalu memakai atribut class, sedangkan garis jaringan TIDAK —
-// jadi pola "<line x1=" hanya menangkap garis jaringan.
-const netGaris = hitung(/<line x1=/g);
+  const svg = svgDibuat.innerHTML;
+  const attr = svgDibuat.attrs;
 
-console.log(`\n  grid: ${garisGrid} garis | jaringan: ${simpul} simpul, ${netGaris} penghubung`);
-console.log(`  denyut: ${denyut} simpul | halo: ${halo} busur | kilat: ${kilat} jalur`);
+  cek("class = cc-bg-svg", attr.class === "cc-bg-svg");
+  cek("aria-hidden = true", attr["aria-hidden"] === "true");
+  cek(`viewBox = "0 0 ${W} ${H}"`, attr.viewBox === `0 0 ${W} ${H}`, attr.viewBox);
+  cek("kanvas kelipatan 400 (grid simetris menyentuh tepi)", W % 400 === 0 && H % 400 === 0, `${W % 400}/${H % 400}`);
+  cek("preserveAspectRatio = slice", attr.preserveAspectRatio === "xMidYMid slice");
 
-// Vertikal: 2000/100 + 1 = 21, horizontal: 1250/100 + 1 = 13 → total 34.
-cek("grid tergambar (21 vertikal + 13 horizontal = 34 garis)", garisGrid === 34, String(garisGrid));
-cek("simpul jaringan ≥ 40 (22 pasang, densitas tetap setelah kanvas diperbesar)", simpul >= 40, String(simpul));
-cek("ada penghubung antar simpul", netGaris > 10, String(netGaris));
-cek("simpul berdenyut ada", denyut >= 4, String(denyut));
-cek("3 busur halo", halo === 3, String(halo));
-cek("2 jalur kilat utama", kilat === 2, String(kilat));
+  /* ANTI-ZOOM: skala slice = max(elemW/W, elemH/H), elem = layar + 80 buffer.
+     Target bg.js 0.55 → grid 100px kanvas tampil ≤ ±56px di layar mana pun. */
+  const skala = Math.max((vw + 80) / W, (vh + 80) / H);
+  const gridLayar = Math.round(100 * skala);
+  cek("skala ≤ 0.56 (latar tidak ngezoom)", skala <= 0.56, `skala=${skala.toFixed(3)} → grid ${gridLayar}px di layar`);
 
-/* PERFORMA: simpul yang berdenyut harus DI LUAR grup ber-mask, kalau tidak
-   <mask> dihitung ulang tiap frame (FPS diam jatuh ~37 → terukur di Chromium).
-   Bukti struktural: grup .ccbg-net-denyut tidak berada di dalam grup ber-mask. */
-const iMask = svg.indexOf('mask="url(#ccbg-pudar-mask)"');
-const iDenyut = svg.indexOf('class="ccbg-net-denyut"');
-const akhirGrupMask = svg.indexOf("</g>", svg.indexOf("ccbg-net-simpul"));
-cek("grup simpul denyut berada DI LUAR grup ber-mask",
-  iDenyut > 0 && iDenyut > akhirGrupMask && iMask > 0, `denyut@${iDenyut} mask@${iMask} tutup-mask@${akhirGrupMask}`);
-const jumlahDenyutLuar = (svg.slice(iDenyut).match(/class="ccbg-simpul-denyut/g) || []).length;
-cek("semua simpul denyut dikeluarkan dari mask", jumlahDenyutLuar === denyut,
-  `${jumlahDenyutLuar} dari ${denyut}`);
-const denyutBak = (svg.match(/fill-opacity="[\d.]+"/g) || []).length;
-cek("nilai pudar simpul denyut dipanggang (fill-opacity)", denyutBak === denyut,
-  `${denyutBak} dari ${denyut}`);
+  cek("tidak ada NaN", !/NaN/.test(svg));
+  cek("tidak ada undefined", !/undefined/.test(svg));
 
-// Definisi <defs> ↔ referensi harus cocok
-const defIds = [...svg.matchAll(/id="(ccbg-[a-z-]+)"/g)].map((m) => m[1]);
-console.log("\n  id di <defs>:", defIds.join(", "));
-for (const id of defIds) {
-  const dipakai = svg.includes(`url(#${id})`);
-  cek(`id "${id}" dipakai (url(#...))`, dipakai);
+  // Elemen struktural
+  const hitung = (re) => (svg.match(re) || []).length;
+  const garisGrid = hitung(/class="ccbg-garis/g);
+  const simpul = hitung(/class="ccbg-simpul/g);
+  const denyut = hitung(/ccbg-denyut/g);
+  const halo = hitung(/class="ccbg-halo-arc/g);
+  const kilat = hitung(/class="ccbg-kilat"/g);
+  const netGaris = hitung(/<line x1=/g); // garis jaringan tanpa class
+
+  console.log(`  grid: ${garisGrid} garis | jaringan: ${simpul} simpul, ${netGaris} penghubung`);
+  cek("grid tergambar penuh ((W/100+1)+(H/100+1) garis)", garisGrid === W / 100 + H / 100 + 2, `${garisGrid} vs ${W / 100 + H / 100 + 2}`);
+  cek("simpul jaringan ≥ 20", simpul >= 20, String(simpul));
+  cek("ada penghubung antar simpul", netGaris > 10, String(netGaris));
+  cek("simpul berdenyut ada", denyut >= 4, String(denyut));
+  cek("3 busur halo", halo === 3, String(halo));
+  cek("2 jalur kilat utama", kilat === 2, String(kilat));
+
+  /* PERFORMA: simpul berdenyut harus DI LUAR grup ber-mask (alasan FPS, lihat bg.js). */
+  const iMask = svg.indexOf('mask="url(#ccbg-pudar-mask)"');
+  const iDenyut = svg.indexOf('class="ccbg-net-denyut"');
+  const akhirGrupMask = svg.indexOf("</g>", svg.indexOf("ccbg-net-simpul"));
+  cek("grup simpul denyut berada DI LUAR grup ber-mask",
+    iDenyut > 0 && iDenyut > akhirGrupMask && iMask > 0, `denyut@${iDenyut} mask@${iMask} tutup@${akhirGrupMask}`);
+  const jumlahDenyutLuar = (svg.slice(iDenyut).match(/class="ccbg-simpul-denyut/g) || []).length;
+  cek("semua simpul denyut dikeluarkan dari mask", jumlahDenyutLuar === denyut, `${jumlahDenyutLuar} dari ${denyut}`);
+  const denyutBak = (svg.match(/fill-opacity="[\d.]+"/g) || []).length;
+  cek("nilai pudar simpul denyut dipanggang (fill-opacity)", denyutBak === denyut, `${denyutBak} dari ${denyut}`);
+
+  // <defs> ↔ referensi
+  const defIds = [...svg.matchAll(/id="(ccbg-[a-z-]+)"/g)].map((m) => m[1]);
+  for (const id of defIds) cek(`id "${id}" dipakai`, svg.includes(`url(#${id})`));
+  const urlRefs = [...svg.matchAll(/url\(#(ccbg-[a-z-]+)\)/g)].map((m) => m[1]);
+  for (const u of new Set(urlRefs)) cek(`referensi url(#${u}) punya definisi`, defIds.includes(u));
+
+  /* ============ SIMETRI CERMIN terhadap x = W/2 ============ */
+  console.log(`  -- simetri cermin (sumbu x = ${TENGAH}) --`);
+
+  const simpulRe = /<circle class="(ccbg-simpul[^"]*)" cx="(\d+)" cy="(\d+)" r="([\d.]+)"(?: fill-opacity="([\d.]+)")?(?: style="animation-delay:([\d.]+)s")?\/>/g;
+  const daftarSimpul = [...svg.matchAll(simpulRe)].map((m) => ({
+    kelas: m[1], x: Number(m[2]), y: Number(m[3]), r: Number(m[4]), tunda: m[5] || null,
+  }));
+  const kunciSimpul = (s) => `${s.x}|${s.y}|${s.kelas}|${s.r}|${s.tunda}`;
+  const himpunanSimpul = new Set(daftarSimpul.map(kunciSimpul));
+  const tanpaCermin = daftarSimpul.filter((s) =>
+    !himpunanSimpul.has(kunciSimpul({ ...s, x: W - s.x })));
+  cek(`semua ${daftarSimpul.length} simpul punya pasangan cermin`, tanpaCermin.length === 0,
+    tanpaCermin.length ? `tanpa cermin: ${tanpaCermin.slice(0, 4).map((s) => s.x + "," + s.y).join(" ")}…` : "");
+
+  const terlaluDekatTengah = daftarSimpul.filter((s) => Math.abs(s.x - TENGAH) < 40);
+  cek("tidak ada simpul menempel garis tengah (< 40px)", terlaluDekatTengah.length === 0);
+
+  const tinggiTengah = 0.45 * H; // pusat elips pemudar (cy = 45% H)
+  const rataY = daftarSimpul.reduce((a, s) => a + s.y, 0) / daftarSimpul.length;
+  cek("sebaran simpul seimbang atas-bawah (rata2 y ≈ 0.45H ± 12%)",
+    Math.abs(rataY - tinggiTengah) <= 0.12 * H, `rata2 y = ${rataY.toFixed(0)} vs ${tinggiTengah.toFixed(0)}`);
+
+  const xsSimpul = daftarSimpul.map((s) => s.x);
+  const minX = Math.min(...xsSimpul), maxX = Math.max(...xsSimpul);
+  cek("kotak jaringan simetris (minX + maxX = W)", minX + maxX === W, `${minX} + ${maxX} = ${minX + maxX}`);
+
+  const garisNet = [...svg.matchAll(/<line x1="(\d+)" y1="(\d+)" x2="(\d+)" y2="(\d+)"\/>/g)]
+    .map((m) => [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]);
+  const kunciGaris = (g) => g.join("|");
+  const setGarisNet = new Set(garisNet.map(kunciGaris));
+  const punyaCermin = ([a, b, c, d]) =>
+    setGarisNet.has(kunciGaris([W - a, b, W - c, d])) ||
+    setGarisNet.has(kunciGaris([W - c, d, W - a, b]));
+  const garisTanpaCermin = garisNet.filter((g) => !punyaCermin(g));
+  cek(`semua ${garisNet.length} penghubung jaringan punya pasangan cermin`,
+    garisTanpaCermin.length === 0, garisTanpaCermin.length ? `${garisTanpaCermin.length} garis` : "");
+
+  const haloRe = /<circle class="ccbg-halo-arc ccbg-halo-\d+" cx="(\d+)" cy="(\d+)" r="(\d+)"\/>/g;
+  const daftarHalo = [...svg.matchAll(haloRe)].map((m) => ({ cx: Number(m[1]), cy: Number(m[2]), r: Number(m[3]) }));
+  cek("semua busur halo berpusat di x = W/2",
+    daftarHalo.length > 0 && daftarHalo.every((h) => h.cx === TENGAH),
+    daftarHalo.map((h) => h.cx).join(","));
+
+  const kilatD = [...svg.matchAll(/class="ccbg-kilat" d="([^"]+)"/g)].map((m) => m[1]);
+  const titikJalur = (d) => [...d.matchAll(/[ML] ?(-?[\d.]+) (-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  if (kilatD.length === 2) {
+    const kiri = titikJalur(kilatD[0]);
+    const kanan = titikJalur(kilatD[1]);
+    const cocok = kiri.length === kanan.length &&
+      kiri.every(([x, y], i) => Math.abs((W - x) - kanan[i][0]) < 0.001 && y === kanan[i][1]);
+    cek("kilat kanan = cerminan tepat kilat kiri", cocok, `${kiri.length} titik per jalur`);
+    const jarakKiri = TENGAH - Math.min(...kiri.map((p) => p[0]));
+    const jarakKanan = Math.max(...kanan.map((p) => p[0])) - TENGAH;
+    cek("jarak kilat ke garis tengah seimbang", jarakKiri === jarakKanan, `kiri ${jarakKiri} / kanan ${jarakKanan}`);
+    // Kilat harus berada DI pita bawah kanvas adaptif (y0 = H−608 … H−218).
+    const semuaY = kiri.map((p) => p[1]);
+    cek("kilat di pita bawah kanvas (y ≥ H−620)", Math.min(...semuaY) >= H - 620, `y ${Math.min(...semuaY)}..${Math.max(...semuaY)} (H=${H})`);
+  } else {
+    cek("ada 2 jalur kilat untuk diperiksa simetrinya", false, String(kilatD.length));
+  }
+
+  const garisGridSemua = [...svg.matchAll(
+    /<line class="ccbg-garis[^"]*" x1="(\d+)" y1="(\d+)" x2="(\d+)" y2="(\d+)"\/>/g)]
+    .map((m) => [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]);
+  const xsGrid = garisGridSemua.filter((g) => g[0] === g[2]).map((g) => g[0]);
+  const setXGrid = new Set(xsGrid);
+  cek("grid vertikal simetris (tiap x punya cermin W − x)",
+    xsGrid.length > 0 && xsGrid.every((x) => setXGrid.has(W - x)), `${xsGrid.length} garis vertikal`);
+  const ysGrid = garisGridSemua.filter((g) => g[1] === g[3]);
+  cek("grid horizontal membentang penuh 0→W (otomatis simetris)",
+    ysGrid.length > 0 && ysGrid.every((g) => g[0] === 0 && g[2] === W), `${ysGrid.length} garis horizontal`);
+  cek("jumlah garis grid konsisten", garisGridSemua.length === garisGrid, `${garisGridSemua.length} vs ${garisGrid}`);
+
+  // Lampu berkedip: pasangan cermin simetris
+  const lampu = [...svg.matchAll(/class="ccbg-lampu" cx="(\d+)" cy="(\d+)"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  const setLampu = new Set(lampu.map((p) => p.join("|")));
+  const lampuTanpaCermin = lampu.filter(([x, y]) => !setLampu.has(`${W - x}|${y}`));
+  cek(`semua ${lampu.length} lampu berkedip punya pasangan cermin`, lampuTanpaCermin.length === 0);
+
+  // Koordinat dalam kanvas (toleransi 200 untuk cahaya yang sengaja keluar tepi).
+  // Batas memakai max(W,H) karena kanvas potret (HP) punya H > W.
+  const batas = Math.max(W, H) + 200;
+  const luar = [...svg.matchAll(/(?:x|cx|y|cy|x1|x2|y1|y2)="(-?\d+(?:\.\d+)?)"/g)]
+    .map((m) => Number(m[1]))
+    .filter((n) => n < -200 || n > batas);
+  cek("tidak ada koordinat nyasar di luar kanvas", luar.length === 0, luar.slice(0, 5).join(","));
+
+  totalErr += err;
 }
-const urlRefs = [...svg.matchAll(/url\(#(ccbg-[a-z-]+)\)/g)].map((m) => m[1]);
-for (const u of new Set(urlRefs)) {
-  cek(`referensi url(#${u}) punya definisi`, defIds.includes(u));
-}
 
-/* ==============================================================
-   SIMETRI CERMIN terhadap x = 1000
-   Permintaan pemilik produk: latar harus "di tengah" & tidak berat sebelah,
-   jadi simetri diperiksa otomatis di sini (bukan sekadar diklaim).
-   ============================================================== */
-const TENGAH = 1000;
-console.log("\n  -- uji simetri cermin (sumbu x = 1000) --");
+for (const l of LAYAR) ujiSatuLayar(l);
 
-/* 1. Jaringan: tiap simpul WAJIB punya pasangan cermin (x' = 2000 − x) dengan
-      y, kelas, dan jeda denyut yang sama persis. */
-/* Simpul diam : class, cx, cy, r.
-   Simpul denyut: class, cx, cy, r, fill-opacity, style(animation-delay) —
-   fill-opacity "dipanggang" oleh bg.js karena simpul ini di LUAR grup ber-mask.
-   Keduanya harus diperiksa agar simetri seluruh 44 simpul benar-benar terbukti. */
-const simpulRe = /<circle class="(ccbg-simpul[^"]*)" cx="(\d+)" cy="(\d+)" r="([\d.]+)"(?: fill-opacity="([\d.]+)")?(?: style="animation-delay:([\d.]+)s")?\/>/g;
-const daftarSimpul = [...svg.matchAll(simpulRe)].map((m) => ({
-  kelas: m[1], x: Number(m[2]), y: Number(m[3]), r: Number(m[4]), tunda: m[5] || null,
-}));
-const kunciSimpul = (s) => `${s.x}|${s.y}|${s.kelas}|${s.r}|${s.tunda}`;
-const himpunanSimpul = new Set(daftarSimpul.map(kunciSimpul));
-const tanpaCermin = daftarSimpul.filter((s) =>
-  !himpunanSimpul.has(kunciSimpul({ ...s, x: 2000 - s.x })));
-cek(`semua ${daftarSimpul.length} simpul punya pasangan cermin`, tanpaCermin.length === 0,
-  tanpaCermin.length ? `tanpa cermin: ${tanpaCermin.map((s) => s.x + "," + s.y).join(" ")}` : "");
-
-/* Simpul tidak boleh menyentuh garis tengah (nanti tampak "menempel" saat HP
-   memotong tengah) maupun keluar kanvas. */
-const terlaluDekatTengah = daftarSimpul.filter((s) => Math.abs(s.x - TENGAH) < 40);
-cek("tidak ada simpul menempel garis tengah (< 40px)", terlaluDekatTengah.length === 0,
-  terlaluDekatTengah.map((s) => s.x).join(","));
-
-/* Sebaran vertikal harus seimbang: rata-rata y mendekati tengah kanvas (625). */
-const rataY = daftarSimpul.reduce((a, s) => a + s.y, 0) / daftarSimpul.length;
-cek("sebaran simpul seimbang atas-bawah (rata2 y ≈ 625 ± 90)",
-  Math.abs(rataY - 625) <= 90, "rata2 y = " + rataY.toFixed(1));
-
-/* Kotak pembatas jaringan harus simetris: minX + maxX tepat 2000. */
-const xsSimpul = daftarSimpul.map((s) => s.x);
-const minX = Math.min(...xsSimpul), maxX = Math.max(...xsSimpul);
-cek("kotak jaringan simetris (minX + maxX = 2000)", minX + maxX === 2000,
-  `${minX} + ${maxX} = ${minX + maxX}`);
-
-/* 2. Penghubung jaringan: setiap garis harus punya pasangan cerminnya.
-      CATATAN PENTING: garis grid punya atribut class SEBELUM x1, jadi pola
-      "<line x1=" hanya menangkap garis jaringan — grid diperiksa terpisah di
-      bagian 5 memakai pola ber-class. */
-const garisNet = [...svg.matchAll(/<line x1="(\d+)" y1="(\d+)" x2="(\d+)" y2="(\d+)"\/>/g)]
-  .map((m) => [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]);
-const kunciGaris = (g) => g.join("|");
-const setGarisNet = new Set(garisNet.map(kunciGaris));
-// Urutan titik boleh TERBALIK: bila sebuah garis menghubungkan tepat sepasang
-// simpul cermin, cerminan garis itu adalah dirinya sendiri dengan ujung
-// tertukar (a,b) → (b,a) — itu tetap dianggap simetris.
-const punyaCermin = ([a, b, c, d]) =>
-  setGarisNet.has(kunciGaris([2000 - a, b, 2000 - c, d])) ||
-  setGarisNet.has(kunciGaris([2000 - c, d, 2000 - a, b]));
-const garisTanpaCermin = garisNet.filter((g) => !punyaCermin(g));
-cek(`semua ${garisNet.length} penghubung jaringan punya pasangan cermin`,
-  garisTanpaCermin.length === 0, garisTanpaCermin.length ? garisTanpaCermin.map(kunciGaris).join(" ") : "");
-
-/* 3. Halo: semua busur harus berpusat tepat di garis tengah. */
-const haloRe = /<circle class="ccbg-halo-arc ccbg-halo-\d+" cx="(\d+)" cy="(\d+)" r="(\d+)"\/>/g;
-const daftarHalo = [...svg.matchAll(haloRe)].map((m) => ({ cx: Number(m[1]), cy: Number(m[2]), r: Number(m[3]) }));
-cek("semua busur halo berpusat di x = 1000",
-  daftarHalo.length > 0 && daftarHalo.every((h) => h.cx === TENGAH),
-  daftarHalo.map((h) => h.cx).join(","));
-
-/* 4. Kilat: jalur kanan harus cerminan tepat jalur kiri. */
-const kilatD = [...svg.matchAll(/class="ccbg-kilat" d="([^"]+)"/g)].map((m) => m[1]);
-const titikJalur = (d) => [...d.matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
-if (kilatD.length === 2) {
-  const kiri = titikJalur(kilatD[0]);
-  const kanan = titikJalur(kilatD[1]);
-  const cocok = kiri.length === kanan.length &&
-    kiri.every(([x, y], i) => Math.abs((2000 - x) - kanan[i][0]) < 0.001 && y === kanan[i][1]);
-  cek("kilat kanan = cerminan tepat kilat kiri", cocok,
-    cocok ? `${kiri.length} titik per jalur` : "titik tidak cermin");
-  // Pasangan kilat harus bersebelahan dengan sumbu? Tidak — kilat di margin tepi,
-  // jadi yang diperiksa adalah jaraknya ke tengah harus sama besar (simetris).
-  const jarakKiri = TENGAH - Math.min(...kiri.map((p) => p[0]));
-  const jarakKanan = Math.max(...kanan.map((p) => p[0])) - TENGAH;
-  cek("jarak kilat ke garis tengah seimbang", jarakKiri === jarakKanan,
-    `kiri ${jarakKiri} / kanan ${jarakKanan}`);
-} else {
-  cek("ada 2 jalur kilat untuk diperiksa simetrinya", false, String(kilatD.length));
-}
-
-/* 5. Grid: garisnya ber-atribut class, jadi diperiksa memakai pola ber-class.
-      Semua garis vertikal (x tetap) harus simetris; garis horizontal otomatis
-      simetris karena bentangnya 0..2000 (tepat di tengah sumbu). */
-const garisGridSemua = [...svg.matchAll(
-  /<line class="ccbg-garis[^"]*" x1="(\d+)" y1="(\d+)" x2="(\d+)" y2="(\d+)"\/>/g)]
-  .map((m) => [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]);
-const xsGrid = garisGridSemua.filter((g) => g[0] === g[2]).map((g) => g[0]);
-const setXGrid = new Set(xsGrid);
-cek("grid vertikal simetris (tiap x punya cermin 2000 − x)",
-  xsGrid.length > 0 && xsGrid.every((x) => setXGrid.has(2000 - x)), `${xsGrid.length} garis vertikal`);
-const ysGrid = garisGridSemua.filter((g) => g[1] === g[3]).map((g) => g[1]);
-cek("grid horizontal membentang penuh 0→2000 (otomatis simetris)",
-  ysGrid.length > 0 && garisGridSemua.filter((g) => g[1] === g[3]).every((g) => g[0] === 0 && g[2] === 2000),
-  `${ysGrid.length} garis horizontal`);
-// Total grid harus cocok dengan jumlah yang dilaporkan di awal.
-cek("jumlah garis grid konsisten dengan laporan awal",
-  garisGridSemua.length === garisGrid, `${garisGridSemua.length} vs ${garisGrid}`);
-
-// Koordinat harus dalam (atau dekat) kanvas — hindari elemen "nyasar"
-const luar = [...svg.matchAll(/(?:x|cx|y|cy|x1|x2|y1|y2)="(-?\d+(?:\.\d+)?)"/g)]
-  .map((m) => Number(m[1]))
-  .filter((n) => n < -250 || n > 2250);
-cek("tidak ada koordinat nyasar (< -250 atau > 2250)", luar.length === 0, luar.join(","));
-
-console.log("\n=== HASIL ===");
-console.log(err === 0 ? "bg.js VALID (0 masalah)" : `${err} masalah ditemukan`);
-process.exit(err === 0 ? 0 : 1);
+console.log("\n=== HASIL AKHIR ===");
+console.log(totalErr === 0 ? "bg.js VALID di semua ukuran layar (0 masalah)" : `${totalErr} masalah ditemukan`);
+process.exit(totalErr === 0 ? 0 : 1);

@@ -132,6 +132,14 @@ function showPanel() {
   const slugAwal = slugDariUrl();
   navigasiAtab(LABEL_ATAB_BC[slugAwal] ? slugAwal : ATAB_DEFAULT, { push: false });
   if (slugAwal === "toko") bacaFilterOrdersDariUrl();
+
+  // Deep-link dua segmen /admin/pesanan/<kode> — URL langsung ke satu pesanan
+  // toko: buka tab toko lalu tampilkan modal detail pesanan tersebut.
+  const mPesanan = location.pathname.match(/^\/admin\/pesanan\/([^/]+)\/?$/i);
+  if (mPesanan) {
+    navigasiAtab("toko", { push: false });
+    bukaDetailOrder(decodeURIComponent(mPesanan[1]));
+  }
 }
 
 function toast(el, msg, ok = true) {
@@ -402,6 +410,11 @@ async function bukaDetail(apiKey, nama) {
 
 function tutupModal() {
   $("modal").classList.add("hidden");
+  // Tutup modal pada URL deep-link → kembali ke daftar toko agar URL
+  // mencerminkan kondisi layar (modal tertutup = halaman daftar).
+  if (location.pathname.startsWith("/admin/pesanan/")) {
+    try { history.replaceState(null, "", "/admin/toko"); } catch { /* abaikan */ }
+  }
 }
 
 async function loadKeys() {
