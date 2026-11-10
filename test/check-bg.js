@@ -178,6 +178,14 @@ function ujiSatuLayar([nama, vw, vh]) {
     daftarHalo.length > 0 && daftarHalo.every((h) => h.cx === TENGAH),
     daftarHalo.map((h) => h.cx).join(","));
 
+  // GUARD REGRESI: origin rotasi grup halo HARUS = pusat busur (TENGAH, H+180).
+  // Dulu hardcode 800px 1180px di CSS (kanvas lama) — pada kanvas adaptif busur
+  // mengembar mengelilingi titik salah dan sering keluar dari cakrawala.
+  const mOrigin = svg.match(/<g class="ccbg-halo" style="transform-origin:(\d+)px (\d+)px">/);
+  cek("grup halo membawa transform-origin dinamis (TENGAH, H+180)",
+    !!mOrigin && Number(mOrigin[1]) === TENGAH && Number(mOrigin[2]) === H + 180,
+    mOrigin ? `${mOrigin[1]},${mOrigin[2]} vs ${TENGAH},${H + 180}` : "tidak ada origin inline");
+
   const kilatD = [...svg.matchAll(/class="ccbg-kilat" d="([^"]+)"/g)].map((m) => m[1]);
   const titikJalur = (d) => [...d.matchAll(/[ML] ?(-?[\d.]+) (-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
   if (kilatD.length === 2) {

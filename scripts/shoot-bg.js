@@ -67,6 +67,22 @@ const VIEWPORTS = [
   await shot("/portal", "portal-login-390", 390, 844);
   await shot("/beli", "beli-1920", 1920, 1080);
 
+  // Crop pita bawah viewport — tempat busur halo ("orbit") memuncul di
+  // cakrawala. Dipakai memverifikasi busur benar-benar terlihat.
+  const band = async (nama, w, h, tinggiPita) => {
+    const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+    await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
+    await page.waitForSelector("svg[viewBox]", { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    await page.screenshot({
+      path: path.join("/tmp/render", `${nama}.png`),
+      clip: { x: 0, y: Math.max(0, h - tinggiPita), width: w, height: tinggiPita },
+    });
+    await page.close();
+  };
+  await band("halo-band-1920", 1920, 1080, 280);
+  await band("halo-band-390", 390, 844, 240);
+
   await browser.close();
   console.log("selesai — screenshot di /tmp/render/");
 })();

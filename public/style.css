@@ -1318,7 +1318,7 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   --cc-grid-kuat: rgba(163, 230, 53, .115);
   --cc-net-garis: rgba(255, 255, 255, .055);
   --cc-net-simpul: rgba(163, 230, 53, .34);
-  --cc-halo: rgba(163, 230, 53, .22);
+  --cc-halo: rgba(163, 230, 53, .55);
   --cc-kilat: rgba(163, 230, 53, .36);
   --cc-strength: 1;
 
@@ -1395,19 +1395,21 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 .cc-bg-svg .ccbg-halo-arc {
   fill: none;
   stroke: var(--cc-halo);
-  stroke-width: 1;
+  /* 1 -> 1.6: pada skala layar ~0.5, stroke 1 unit hanya ~0.5px (sub-pixel,
+     nyaris hilang). 1.6 unit ~ 0.8px — terlihat jelas tapi tetap halus. */
+  stroke-width: 1.6;
 }
-.cc-bg-svg .ccbg-halo-1 { stroke-dasharray: 26 18; opacity: .85; }
-.cc-bg-svg .ccbg-halo-2 { stroke-dasharray: 2 14; opacity: .65; }
-.cc-bg-svg .ccbg-halo-3 { stroke-dasharray: 60 40; opacity: .45; }
+.cc-bg-svg .ccbg-halo-1 { stroke-dasharray: 26 18; opacity: .9; }
+.cc-bg-svg .ccbg-halo-2 { stroke-dasharray: 2 14; opacity: .75; }
+.cc-bg-svg .ccbg-halo-3 { stroke-dasharray: 60 40; opacity: .6; }
 /* Satu grup, satu animasi → hemat GPU (bukan tiga animasi terpisah). */
 /* will-change: transform → halo berputar tiap frame, jadi beri tahu browser
    agar layer sudah siap sebelum animasi mulai (hilangkan frame pertama yang
-   tersendat saat dipromosikan). transform-origin x=800 = titik tengah kanvas,
-   sehingga rotasi tetap simetris. */
+   tersendat saat dipromosikan). transform-origin sekarang di-set DINAMIS oleh
+   bg.js secara inline (pusat busur = TENGAH, H+180) mengikuti kanvas adaptif —
+   versi lama 800px 1180px dihapus karena hanya benar untuk kanvas lama. */
 .cc-bg-svg .ccbg-halo {
   animation: ccbg-halo-spin 180s linear infinite;
-  transform-origin: 800px 1180px;
   will-change: transform;
 }
 
@@ -1517,8 +1519,9 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
   /* Hanya kilat yang dimatikan di HP: letaknya di margin tepi, dan pada layar
      sempit kolom konten memenuhi lebar sehingga berisiko menimpa teks. */
   .cc-bg-svg .ccbg-kilat-grup { display: none; }
-  /* Halo: pendar cakrawala tetap ada, sedikit lebih lembut dari desktop. */
-  .cc-bg-svg .ccbg-halo { --cc-halo: rgba(163, 230, 53, .18); }
+  /* Halo: pendar cakrawala tetap ada — diterangkan dari .18 ke .34 supaya
+     juga jelas terlihat di layar sempit (permintaan pemilik produk). */
+  .cc-bg-svg .ccbg-halo { --cc-halo: rgba(163, 230, 53, .40); }
 }
 
 /* Tablet & laptop kecil: jaringan tetap, kilat dimatikan agar tak dekat konten */

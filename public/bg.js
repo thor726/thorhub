@@ -275,7 +275,11 @@
    */
   function buatHalo() {
     var isi = "";
-    var radius = [380, 470, 560];
+    // Radius dinaikkan dari [380,470,560]: busur hanya "muncul" sedikit di atas
+    // cakrawala, di desktop 1920 puncak busur luar cuma ~134px dari tepi bawah
+    // sehingga nyaris tak disadari. [420,540,680] → muncul ~200px (0.5 skala)
+    // dengan lengkungan yang tetap terbaca sebagai orbit.
+    var radius = [420, 540, 680];
     for (var i = 0; i < radius.length; i++) {
       isi += '<circle class="ccbg-halo-arc ccbg-halo-' + (i + 1) +
              '" cx="' + TENGAH + '" cy="' + (H + 180) + '" r="' + radius[i] + '"/>';
@@ -411,7 +415,11 @@
       '<g class="ccbg-net-denyut">' + jaring.simpulDenyut + "</g>" +
 
       // --- Lapis 4: halo cakrawala + cahaya berkedip + kilat ---
-      '<g class="ccbg-halo">' + buatHalo() + "</g>" +
+      // transform-origin DINAMIS: pusat busur = (TENGAH, H+180). Dulu di-CSS
+      // hardcode 800px 1180px (kanvas lama 1600x1000) — pada kanvas adaptif
+      // busur ikut mengembar mengelilingi titik yang salah sehingga sering
+      // berada jauh dari cakrawala (terkesan "hilang") selama siklus rotasi.
+      '<g class="ccbg-halo" style="transform-origin:' + TENGAH + "px " + (H + 180) + 'px">' + buatHalo() + "</g>" +
       '<g class="ccbg-lampu-grup">' + buatKedip() + "</g>" +
       '<g class="ccbg-kilat-grup">' + buatKilat() + "</g>";
 
