@@ -1313,13 +1313,25 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 
 .cc-bg-svg {
   --cc-lime: #a3e635;
-  /* Warna tiap lapis dipisah supaya bisa disetel tanpa menyentuh yang lain */
-  --cc-grid: rgba(255, 255, 255, .042);
-  --cc-grid-kuat: rgba(163, 230, 53, .115);
-  --cc-net-garis: rgba(255, 255, 255, .055);
-  --cc-net-simpul: rgba(163, 230, 53, .34);
-  --cc-halo: rgba(163, 230, 53, .55);
-  --cc-kilat: rgba(163, 230, 53, .36);
+  /* Warna tiap lapis dipisah supaya bisa disetel tanpa menyentuh yang lain.
+
+     KALIBRASI ULANG (permintaan pemilik: "opacity-nya turunin dikit biar
+     tidak tabrakan") — versi terang sebelumnya membuat latar bersaing dengan
+     konten. Acuan penyetelan sekarang:
+       • garis jaringan (rasi bintang) → lime redup .09: tetap TERBACA
+         (naik 1,6× dari putih .055 yang dulu tak kelihatan), tetapi jauh di
+         bawah .135 yang bikin latar ramai;
+       • simpul .42 & halo .46: jelas berada di BAWAH konten, bukan
+         bersaing dengannya;
+       • kilat .30: cukup terlihat di margin, tak memancing mata.
+     Hierarki lapis dipertahankan: grid < garis jaringan < simpul < kilat
+     < halo. Nilai ini DIUJI visual di 390/1440/1920px. */
+  --cc-grid: rgba(255, 255, 255, .046);
+  --cc-grid-kuat: rgba(163, 230, 53, .12);
+  --cc-net-garis: rgba(163, 230, 53, .09);
+  --cc-net-simpul: rgba(163, 230, 53, .42);
+  --cc-halo: rgba(163, 230, 53, .46);
+  --cc-kilat: rgba(163, 230, 53, .30);
   --cc-strength: 1;
 
   position: fixed;
@@ -1372,8 +1384,10 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
 .cc-bg-svg .ccbg-garis { stroke: var(--cc-grid); stroke-width: 1.1; }
 .cc-bg-svg .ccbg-garis-utama { stroke: var(--cc-grid-kuat); stroke-width: 1; }
 
-/* --- Lapis 3: jaringan simpul --- */
-.cc-bg-svg .ccbg-net-garis line { stroke: var(--cc-net-garis); stroke-width: 1.1; }
+/* --- Lapis 3: jaringan simpul ---
+   stroke-width 1.25 (bukan 1.1): pada skala layar ~0.5 hasilnya ±0,62px —
+   cukup untuk garis lime redup tidak pecah saat anti-aliasing, tetap tipis. */
+.cc-bg-svg .ccbg-net-garis line { stroke: var(--cc-net-garis); stroke-width: 1.25; }
 .cc-bg-svg .ccbg-simpul,
 .cc-bg-svg .ccbg-simpul-denyut { fill: var(--cc-net-simpul); }
 /* Simpul aktif berdenyut pelan; animation-delay diatur inline per simpul
@@ -1507,21 +1521,23 @@ label .btn { margin-left: auto; } /* tombol kecil menempel kanan label */
    (x ≈ 535–1065 di viewBox 1600), jadi grid tetap tampil rapat & rapi. */
 @media (max-width: 899px) {
   .cc-bg-svg {
-    /* Di HP tetap terang (jangan dibuat gelap) — hanya grid sedikit diringankan
-       agar tidak terasa ramai pada layar kecil; jaringan TETAP tampil karena
-       komposisinya sudah simetris sehingga aman di belakang konten. */
+    /* Di HP: selaras dengan desktop — rasi bintang lime redup yang sama
+       (hanya grid sedikit diringankan agar tidak ramai di layar kecil).
+       Jaringan TETAP tampil karena komposisinya simetris sehingga aman
+       di belakang konten. Nilai ikut kalibrasi "turunin dikit" di atas. */
     --cc-strength: 1;
-    --cc-grid: rgba(255, 255, 255, .034);
-    --cc-grid-kuat: rgba(163, 230, 53, .095);
-    --cc-net-garis: rgba(255, 255, 255, .045);
-    --cc-net-simpul: rgba(163, 230, 53, .28);
+    --cc-grid: rgba(255, 255, 255, .038);
+    --cc-grid-kuat: rgba(163, 230, 53, .10);
+    --cc-net-garis: rgba(163, 230, 53, .085);
+    --cc-net-simpul: rgba(163, 230, 53, .38);
   }
   /* Hanya kilat yang dimatikan di HP: letaknya di margin tepi, dan pada layar
      sempit kolom konten memenuhi lebar sehingga berisiko menimpa teks. */
   .cc-bg-svg .ccbg-kilat-grup { display: none; }
-  /* Halo: pendar cakrawala tetap ada — diterangkan dari .18 ke .34 supaya
-     juga jelas terlihat di layar sempit (permintaan pemilik produk). */
-  .cc-bg-svg .ccbg-halo { --cc-halo: rgba(163, 230, 53, .40); }
+  /* Halo: pendar cakrawala tetap ada — di HP cukup .36 (turun dari .40;
+     busur di layar sempit relatif lebih besar, jadi meski lebih redup
+     tetap terbaca dan tidak menabrak teks. */
+  .cc-bg-svg .ccbg-halo { --cc-halo: rgba(163, 230, 53, .36); }
 }
 
 /* Tablet & laptop kecil: jaringan tetap, kilat dimatikan agar tak dekat konten */
