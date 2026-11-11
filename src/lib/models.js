@@ -2,7 +2,7 @@
  * models.js — Snapshot resmi daftar model provider utama (Re:Link Gateway).
  *
  * Sumber: https://relink-gateway.biz.id/ (tab Model, via __data.json server-side)
- * Total 42 model, 26 aktif (disinkronkan dengan /v1/models provider). Data ini
+ * Total 42 model, 25 aktif (disinkronkan dengan /v1/models provider). Data ini
  * dipakai sebagai FALLBACK bila provider
  * tidak bisa dihubungi, sehingga halaman dokumentasi tetap menampilkan daftar
  * model yang benar. Bila provider bisa diakses, data live tetap diprioritaskan.
@@ -31,7 +31,7 @@ const DEFAULT_MODEL = "deepseek-v4-pro";
 const MODELS = [
   { id: "auto", label: "Auto", vendor: "Lainnya", vision: false, multiplier: 1, active: true },
   { id: "claude-opus-5", label: "Claude Opus 5", vendor: "Anthropic", vision: true, multiplier: 20, active: false },
-  { id: "claude-opus-5-5", label: "Claude Opus 5 5", vendor: "Anthropic", vision: true, multiplier: 32, active: true },
+  { id: "claude-opus-5-5", label: "Claude Opus 5 5", vendor: "Anthropic", vision: true, multiplier: 32, active: false },
   { id: "claude-sonnet-5", label: "Claude Sonnet 5", vendor: "Anthropic", vision: true, multiplier: 10, active: false },
   { id: "deepseek-v4-flash", label: "Deepseek V4 Flash", vendor: "DeepSeek", vision: false, multiplier: 2, active: true },
   { id: "deepseek-v4-flash-0731", label: "Deepseek V4 Flash 0731", vendor: "DeepSeek", vision: false, multiplier: 2, active: true },

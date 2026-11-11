@@ -13,3 +13,6 @@ npm-debug.log*
 .*.swp
 ..env.swp
 *.swp
+
+# Salinan cadangan .env — jangan pernah di-commit
+.env.bak
