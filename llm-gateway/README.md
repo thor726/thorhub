@@ -78,18 +78,18 @@ otomatis — lihat [bagian 19](#19-toko-pembelian-otomatis-qris-dana)).
 ## 2. Struktur Folder
 
 ```
-project/                         # root workspace (lihat apps/README.md)
-└── apps/
-    └── llm-gateway/             # <— seluruh kode gateway ada di sini
-        ├── package.json              # Dependensi & script npm
-        ├── .env.example              # Template konfigurasi (salin jadi .env)
-        ├── .gitignore
-        ├── README.md
-        ├── generate-key.js           # CLI: terbitkan Sub-API Key baru
-        ├── manage-keys.js            # CLI: list/show/enable/disable/topup/delete key
-        │
-        ├── data/                     # SQLite runtime (tidak di-commit)
-        ├── src/
+project/                         # root repo (hanya .gitignore + folder project)
+├── .gitignore
+└── llm-gateway/                 # <— seluruh kode gateway ada di sini
+    ├── package.json             # Dependensi & script npm
+    ├── .env.example             # Template konfigurasi (salin jadi .env)
+    ├── .gitignore
+    ├── README.md
+    ├── generate-key.js          # CLI: terbitkan Sub-API Key baru
+    ├── manage-keys.js           # CLI: list/show/enable/disable/topup/delete key
+    │
+    ├── data/                    # SQLite runtime (tidak di-commit)
+    ├── src/
 │   ├── server.js             # Entry point Express (static, route, 404, error)
 │   ├── config.js             # Loader konfigurasi .env + validasi
 │   ├── db.js                 # SQLite (better-sqlite3) + skema tabel

@@ -1,4 +1,4 @@
-# Dependensi — root & seluruh workspace di apps/*
+# Dependensi — tiap folder project di root
 node_modules/
 
 # Rahasia & konfigurasi lokal — jangan pernah di-commit
