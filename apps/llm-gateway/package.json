@@ -1,0 +1,35 @@
+{
+  "name": "llm-proxy-gateway",
+  "version": "1.0.0",
+  "description": "API Proxy Gateway untuk menjual kembali akses LLM API dengan sistem Sub-API Key, kuota token, toko pembelian otomatis (QRIS DANA), dan tanpa rate-limit.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "mock": "node test/mock-provider.js",
+    "test:security": "node test/check-security.js",
+    "test:ui": "node test/check-ui.js",
+    "test:identitas": "node test/check-identitas.js",
+    "test:multiplier": "node test/check-multiplier.js",
+    "test:models": "node scripts/sync-models.js",
+    "sync:models": "node scripts/sync-models.js --tulis",
+    "test:endpoints": "node --env-file=.env test/check-endpoints.js",
+    "test": "node test/jalankan-semua.js",
+    "test:browser": "node test/check-routing.js && node test/check-breadcrumb.js",
+    "test:semua-suite": "node test/jalankan-semua.js",
+    "test:bg": "node test/check-bg.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
+  }
+}

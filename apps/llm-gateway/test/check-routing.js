@@ -8,7 +8,7 @@
 const { chromium } = require("playwright");
 
 const BASE = "http://127.0.0.1:3000";
-require("dotenv").config({ path: "/home/z/my-project/llm-proxy-gateway/.env" });
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 const crypto = require("crypto");
 const db = require("../src/db");
 const TEST_KEY = "sk-thor-5cdc4026cc623ec41fcaa61f8e7fb54683b00b88aa9335f7";

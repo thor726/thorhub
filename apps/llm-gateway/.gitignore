@@ -1,0 +1,30 @@
+# Dependensi
+node_modules/
+
+# Rahasia & konfigurasi lokal — jangan pernah di-commit
+.env
+.env.*
+!.env.example
+
+# Database & data runtime
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Log & berkas debug
+*.log
+npm-debug.log*
+
+# Cadangan lokal tema
+.backup-tema-thor/
+
+# Salinan cadangan .env
+.env.bak
+
+# Berkas sementara editor (mis. swap vim)
+*.swp
+.*.swp
+..env.swp
+
+# Catatan: aturan serupa juga ada di .gitignore root workspace.
+# Berkas ini dipertahankan agar project tetap aman kalau folder ini dipakai sendirian.

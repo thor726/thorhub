@@ -1,0 +1,13 @@
+{
+  "//": "Membantu editor/VSCode memetakan alias '@apps/*' ke folder apps/*. Tidak dipakai runtime.",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2022",
+    "baseUrl": ".",
+    "paths": {
+      "@apps/*": ["apps/*"]
+    }
+  },
+  "include": ["apps/**/*.js"],
+  "exclude": ["**/node_modules", "**/data"]
+}

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Nyalakan mock-provider (9999) + gateway (3000) secara terpisah dari sesi shell.
-PROYEK=/home/z/my-project/llm-proxy-gateway
+PROYEK="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 jalan() {  # jalan <url> <logfile> <args...>
   if curl -s -o /dev/null -m 2 "$1"; then return 0; fi

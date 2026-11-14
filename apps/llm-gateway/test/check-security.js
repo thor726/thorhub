@@ -91,9 +91,14 @@ const http = async (urlPath, opts = {}) => {
     cek("Header referrer-policy", !!r.headers.get("referrer-policy"), "(tidak ada)");
     const csp = r.headers.get("content-security-policy") || "";
     cek("Header content-security-policy", !!csp, "(tidak ada)");
-    if (csp.includes("frame-ancestors")) {
-      cek("Header frame-ancestors (mode preview)", csp.includes("frame-ancestors *"), "(frame-ancestors tanpa *)");
+    // Server SELALU mengirim frame-ancestors (nilainya '*' di mode preview,
+    // "'none'" di mode produksi) — jadi penentu mode adalah NILAI-nya, bukan
+    // ada/tidaknya direktif itu. Kalau bukan '*', mode produksi diharuskan
+    // mengirim X-Frame-Options sebagai pengaman tambahan.
+    if (/frame-ancestors\s+\*/.test(csp)) {
+      cek("Header frame-ancestors (mode preview)", true, "");
     } else {
+      cek("Header frame-ancestors (mode produksi, harus 'none')", /frame-ancestors\s+'none'/.test(csp), "(bukan 'none')");
       cek("Header x-frame-options (mode produksi)", !!r.headers.get("x-frame-options"), "(tidak ada)");
     }
   }

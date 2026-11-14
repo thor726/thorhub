@@ -1,33 +1,20 @@
 {
-  "name": "llm-proxy-gateway",
+  "name": "thorhub-workspace",
   "version": "1.0.0",
-  "description": "API Proxy Gateway untuk menjual kembali akses LLM API dengan sistem Sub-API Key, kuota token, toko pembelian otomatis (QRIS DANA), dan tanpa rate-limit.",
-  "main": "src/server.js",
+  "private": true,
+  "description": "Workspace monorepo: kumpulan project mandiri di dalam apps/. Kode aplikasi TIDAK ditaruh di root.",
+  "workspaces": [],
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "mock": "node test/mock-provider.js",
-    "test:security": "node test/check-security.js",
-    "test:ui": "node test/check-ui.js",
-    "test:identitas": "node test/check-identitas.js",
-    "test:multiplier": "node test/check-multiplier.js",
-    "test:models": "node scripts/sync-models.js",
-    "sync:models": "node scripts/sync-models.js --tulis",
-    "test:endpoints": "node --env-file=.env test/check-endpoints.js",
-    "test": "node test/check-security.js && node test/check-identitas.js && node test/check-ui.js && node test/check-css.js && node test/check-bg.js && node test/check-animasi.js && node test/check-multiplier.js",
-    "test:bg": "node test/check-bg.js"
+    "app:baru": "bash scripts/app-baru.sh",
+    "app:daftar": "bash scripts/daftar-app.sh",
+    "install:semua": "bash scripts/install-semua.sh",
+    "gateway": "npm --prefix apps/llm-gateway run dev",
+    "gateway:start": "npm --prefix apps/llm-gateway start",
+    "test": "npm --prefix apps/llm-gateway test",
+    "test:semua": "bash scripts/test-semua.sh"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "license": "MIT",
-  "dependencies": {
-    "better-sqlite3": "^13.0.3",
-    "dotenv": "^16.6.1",
-    "express": "^4.21.2",
-    "qrcode": "^1.5.4"
-  },
-  "allowScripts": {
-    "better-sqlite3@11.10.0": true
-  }
+  "license": "MIT"
 }

@@ -5,9 +5,10 @@
    - Beli: segmen ikut tahap Checkout → Pembayaran → Selesai */
 const { chromium } = require("playwright");
 const fs = require("fs");
+const path = require("path");
 
 const BASE = "http://127.0.0.1:3000";
-require("dotenv").config({ path: "/home/z/my-project/llm-proxy-gateway/.env" });
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const TEST_KEY = "sk-thor-5cdc4026cc623ec41fcaa61f8e7fb54683b00b88aa9335f7";
 
 let lolos = 0, gagal = 0;

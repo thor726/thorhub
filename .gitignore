@@ -1,18 +1,30 @@
+# Dependensi — root & seluruh workspace di apps/*
 node_modules/
+
+# Rahasia & konfigurasi lokal — jangan pernah di-commit
 .env
-data/*.db
-data/*.db-wal
-data/*.db-shm
-npm-debug.log*
+.env.*
+!.env.example
+
+# Database lokal
+**/data/*.db
+**/data/*.db-wal
+**/data/*.db-shm
+
+# Log & berkas debug
 *.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# cadangan lokal tema
-.backup-tema-thor/
-
-# berkas sementara editor (vim swap untuk .env)
-.*.swp
-..env.swp
+# Berkas sementara editor / OS
 *.swp
+.*.swp
+.DS_Store
+Thumbs.db
 
-# Salinan cadangan .env — jangan pernah di-commit
-.env.bak
+# Hasil build & cache
+dist/
+build/
+.cache/
+*.tsbuildinfo
